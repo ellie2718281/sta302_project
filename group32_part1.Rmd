@@ -1,0 +1,714 @@
+---
+title: "Group 32 – Part 1"
+author: "Group 32"
+date: "`r Sys.Date()`"
+output: pdf_document
+geometry: margin=0.5in
+urlcolor: blue
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
+                      fig.align = "center")
+```
+
+```{r packages}
+library(NHANES)
+library(dplyr)
+library(tidyr)
+library(readr)
+library(ggplot2)
+library(broom)
+library(knitr)
+library(patchwork)
+```
+
+## 1. Data Preparation
+
+We use two versions of the data:
+\begin{itemize}
+  \item \textbf{\texttt{dat}} --- all participants with a measured SBP, used for exploratory plots.
+  \item \textbf{\texttt{nhanes\_adult}} --- restricted to age $\geq$ 20 (required for \texttt{Smoke100} and \texttt{AlcoholYear}), complete cases across all model variables, and \textbf{one row per participant}, used for modelling.
+\end{itemize}
+
+The `NHANES` package was built by resampling `NHANESraw` with replacement, so the
+same participant (`ID`) can appear in several identical rows. Following the
+instructor's guidance, we aggregate to one row per individual. Repeated rows are
+identical on every model variable, so this is the same as keeping the first row.
+
+```{r data-prep}
+dat <- NHANES %>%
+  filter(!is.na(BPSysAve))
+
+model_vars <- c("BPSysAve", "Age", "BMI", "DirectChol", "TotChol", "Poverty",
+                "SleepHrsNight", "AlcoholYear", "Gender", "Smoke100", "PhysActive")
+
+adult_cc <- NHANES %>%
+  filter(Age >= 20) %>%
+  select(ID, all_of(model_vars)) %>%
+  na.omit()
+
+# duplicated IDs have identical values on every model variable
+stopifnot(nrow(distinct(adult_cc)) == n_distinct(adult_cc$ID))
+
+nhanes_adult <- adult_cc %>%
+  distinct(ID, .keep_all = TRUE) %>%   # one row per participant
+  select(-ID)
+
+cat("Exploratory sample (dat):                  n =", nrow(dat), "\n")
+cat("Adults 20+, complete cases (with repeats): n =", nrow(adult_cc), "\n")
+cat("Model sample, unique participants:         n =", nrow(nhanes_adult), "\n")
+```
+
+## 2. Response Variable: Systolic Blood Pressure
+
+```{r sbp-summary}
+sbp <- dat$BPSysAve
+summary(sbp)
+cat("SD:", round(sd(sbp), 2), "\n")
+```
+
+```{r sbp-plots, fig.width = 9, fig.height = 4}
+par(mfrow = c(1, 2))
+
+# Histogram
+hist(sbp, breaks = 40, freq = FALSE, col = "grey80", border = "white",
+     main = "Distribution of SBP", xlab = "Systolic BP (mm Hg)")
+lines(density(sbp), lwd = 1.5)
+curve(dnorm(x, mean(sbp), sd(sbp)), col = "red", lty = 2, lwd = 1.5, add = TRUE)
+legend("topright", legend = c("Empirical", "Normal"), lty = c(1, 2),
+       col = c("black", "red"), bty = "n", cex = 0.8)
+
+# Q-Q plot
+qqnorm(sbp, main = "Q–Q Plot of SBP"); qqline(sbp, col = "red")
+
+par(mfrow = c(1, 1))
+```
+
+## 3. Predictor Variables
+
+### 3.1 Numeric Predictors
+
+```{r num-summary}
+num_vars <- c("Age", "BMI", "DirectChol", "TotChol",
+              "Poverty", "SleepHrsNight", "AlcoholYear")
+
+skewness <- function(x) {
+  x <- x[!is.na(x)]
+  mean((x - mean(x))^3) / sd(x)^3
+}
+
+nhanes_adult %>%
+  select(all_of(num_vars)) %>%
+  pivot_longer(everything(), names_to = "Variable", values_to = "x") %>%
+  group_by(Variable) %>%
+  summarise(
+    Mean     = round(mean(x, na.rm = TRUE), 2),
+    SD       = round(sd(x, na.rm = TRUE), 2),
+    Median   = round(median(x, na.rm = TRUE), 2),
+    IQR      = round(IQR(x, na.rm = TRUE), 2),
+    Min      = round(min(x, na.rm = TRUE), 2),
+    Max      = round(max(x, na.rm = TRUE), 2),
+    Skewness = round(skewness(x), 2),
+    .groups  = "drop"
+  ) %>%
+  kable(caption = paste0("Summary statistics for numeric predictors (model sample, n = ", format(nrow(nhanes_adult), big.mark = ","), ")."))
+```
+
+```{r hist-predictors, fig.width = 10, fig.height = 5}
+nhanes_adult %>%
+  select(all_of(num_vars)) %>%
+  pivot_longer(everything(), names_to = "Variable", values_to = "value") %>%
+  ggplot(aes(x = value)) +
+  geom_histogram(bins = 30, fill = "grey70", colour = "white") +
+  facet_wrap(~ Variable, scales = "free", ncol = 4) +
+  labs(title = "Histograms of Numeric Predictors", x = NULL, y = "Count") +
+  theme_bw()
+```
+
+```{r box-predictors, fig.width = 10, fig.height = 5}
+nhanes_adult %>%
+  select(all_of(num_vars)) %>%
+  pivot_longer(everything(), names_to = "Variable", values_to = "value") %>%
+  ggplot(aes(y = value)) +
+  geom_boxplot(fill = "grey85") +
+  facet_wrap(~ Variable, scales = "free", ncol = 4) +
+  labs(title = "Boxplots of Numeric Predictors", y = NULL) +
+  theme_bw() +
+  theme(axis.text.x = element_blank(), axis.ticks.x = element_blank())
+```
+
+### 3.2 Categorical Predictors
+
+```{r cat-summary}
+cat_vars <- c("Gender", "Smoke100", "PhysActive")
+
+nhanes_adult %>%
+  select(all_of(cat_vars)) %>%
+  mutate(across(everything(), as.character)) %>%
+  pivot_longer(everything(), names_to = "Variable", values_to = "Level") %>%
+  count(Variable, Level) %>%
+  group_by(Variable) %>%
+  mutate(Percent = round(100 * n / sum(n), 1)) %>%
+  ungroup() %>%
+  rename(N = n) %>%
+  kable(caption = "Frequency counts for categorical predictors (model sample).")
+```
+
+```{r bar-predictors, fig.width = 8, fig.height = 3.5}
+nhanes_adult %>%
+  select(all_of(cat_vars)) %>%
+  mutate(across(everything(), as.character)) %>%
+  pivot_longer(everything(), names_to = "Variable", values_to = "Level") %>%
+  ggplot(aes(x = Level)) +
+  geom_bar(fill = "grey70") +
+  facet_wrap(~ Variable, scales = "free_x", ncol = 3) +
+  labs(title = "Categorical Predictors", x = NULL, y = "Count") +
+  theme_bw()
+```
+
+## 4. Research Question: SBP vs Age by Gender
+
+```{r sbp-age-lm, fig.width = 7, fig.height = 4.5}
+ggplot(dat %>% filter(!is.na(Gender)),
+       aes(x = Age, y = BPSysAve, colour = Gender)) +
+  geom_point(alpha = 0.15, size = 0.8) +
+  geom_smooth(method = "lm", se = TRUE, linewidth = 1.2) +
+  labs(title = "SBP vs Age by Gender (Linear Fits)",
+       x = "Age (years)", y = "Systolic BP (mm Hg)") +
+  theme_bw()
+```
+
+```{r sbp-age-loess, fig.width = 7, fig.height = 4.5}
+ggplot(dat %>% filter(!is.na(Gender)),
+       aes(x = Age, y = BPSysAve, colour = Gender)) +
+  geom_smooth(method = "loess", se = TRUE, linewidth = 1.2) +
+  labs(title = "Mean SBP by Age and Gender (Loess)",
+       x = "Age (years)", y = "Systolic BP (mm Hg)") +
+  theme_bw()
+```
+
+```{r gender-slopes}
+nhanes_adult %>%
+  group_by(Gender) %>%
+  summarise(
+    `Age slope (β)` = round(coef(lm(BPSysAve ~ Age))[2], 3),
+    n = n()
+  ) %>%
+  kable(caption = "Simple age slope within each gender group.")
+```
+
+## 5. Data Cleaning and Analysis
+
+Cleaning follows three rules:
+\begin{itemize}
+  \item keep participants aged 20 years and older
+  \item exclude rows with a missing value in any model variable, since the model can only be fit on complete cases
+  \item remove duplicated IDs so that each participant appears once, ensuring independence of observations
+\end{itemize}
+
+```{r select-variables}
+vars_cont <- c("Age", "AlcoholYear", "BMI", "DirectChol",
+               "Poverty", "SleepHrsNight", "TotChol")
+vars_cat  <- c("Gender", "PhysActive", "Smoke100")
+
+dat_raw <- NHANES %>%
+  select(ID, SBP = BPSysAve, all_of(vars_cont), all_of(vars_cat))
+```
+
+### 5.1 Cleaning steps
+
+```{r cleaning}
+n0 <- nrow(dat_raw)
+
+# restrict to adults (age >= 20)
+dat_adult <- dat_raw %>% filter(Age >= 20)
+n1 <- nrow(dat_adult)
+
+# drop rows with a missing value in ANY model variable
+dat_cc <- dat_adult %>% drop_na()
+n2 <- nrow(dat_cc)
+
+# keep one row per participant ID
+dat <- dat_cc %>% distinct(ID, .keep_all = TRUE)
+n3 <- nrow(dat)
+
+cleaning_log <- tibble(
+  Step = c("Raw data",
+           "Age >= 20",
+           "Complete cases (no missing in any model variable)",
+           "Unique participant IDs"),
+  `Rows remaining` = c(n0, n1, n2, n3),
+  `Rows removed`   = c(NA, n0 - n1, n1 - n2, n2 - n3)
+)
+
+kable(cleaning_log, caption = "Number of rows remaining after each cleaning step.")
+```
+
+### 5.2 Cleaned response variable
+
+```{r fig-response, fig.width = 10, fig.height = 4.5}
+par(mfrow = c(1, 2))
+hist(dat$SBP, breaks = 40, freq = FALSE, col = "steelblue", border = "white",
+     main = "Distribution of SBP", xlab = "Systolic BP (mm Hg)")
+lines(density(dat$SBP), lwd = 1.5)
+qqnorm(dat$SBP, main = "Normal Q-Q Plot of SBP")
+qqline(dat$SBP, col = "red")
+par(mfrow = c(1, 1))
+```
+
+### 5.3 Cleaned predictor variables
+
+```{r fig-predictors, fig.width = 11, fig.height = 9}
+cont_long <- dat %>%
+  select(all_of(vars_cont)) %>%
+  pivot_longer(everything(), names_to = "variable", values_to = "value")
+
+cat_long <- dat %>%
+  select(all_of(vars_cat)) %>%
+  mutate(across(everything(), as.character)) %>%
+  pivot_longer(everything(), names_to = "variable", values_to = "level")
+
+p2a <- ggplot(cont_long, aes(value)) +
+  geom_histogram(bins = 30, fill = "steelblue", colour = "white") +
+  facet_wrap(~ variable, scales = "free", ncol = 4) +
+  labs(title = "Continuous Predictors", x = NULL, y = "Count")
+
+p2b <- ggplot(cat_long, aes(level)) +
+  geom_bar(fill = "darkorange") +
+  geom_text(stat = "count", aes(label = after_stat(count)),
+            vjust = -0.3, size = 3) +
+  facet_wrap(~ variable, scales = "free_x", nrow = 1) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.12))) +
+  labs(title = "Categorical Predictors", x = NULL, y = "Count")
+
+p2a / p2b + plot_layout(heights = c(2, 1))
+```
+
+```{r fig-boxplots, fig.width = 10, fig.height = 6}
+ggplot(cont_long, aes(x = "", y = value)) +
+  geom_boxplot(fill = "lightblue", outlier.colour = "red", outlier.alpha = 0.4) +
+  facet_wrap(~ variable, scales = "free_y", nrow = 2) +
+  labs(title = "Boxplots of Continuous Predictors", x = NULL, y = NULL)
+```
+
+```{r summary-table}
+dat %>%
+  select(SBP, all_of(vars_cont)) %>%
+  pivot_longer(everything(), names_to = "Variable", values_to = "value") %>%
+  group_by(Variable) %>%
+  summarise(
+    Mean   = round(mean(value), 2),
+    SD     = round(sd(value), 2),
+    Min    = round(min(value), 2),
+    Median = round(median(value), 2),
+    Max    = round(max(value), 2),
+    .groups = "drop"
+  ) %>%
+  kable(caption = "Summary statistics for SBP and the continuous predictors (cleaned data).")
+```
+
+### 5.4 Cleaned age by gender interaction
+
+```{r fig-age-gender, fig.width = 7, fig.height = 4.5}
+ggplot(dat, aes(x = Age, y = SBP, colour = Gender)) +
+  geom_point(alpha = 0.15, size = 0.8) +
+  geom_smooth(method = "lm", se = TRUE, linewidth = 1.1) +
+  labs(title = "SBP vs Age by Gender",
+       x = "Age (years)", y = "Systolic BP (mm Hg)") +
+  theme_bw()
+```
+
+### 5.5 Save the cleaned data
+
+```{r save-clean}
+write_csv(dat, "NHANES_cleaned.csv")
+```
+
+## 6. Preliminary Model
+
+```{r fit-model}
+model_prelim <- lm(
+  BPSysAve ~ Age + BMI + DirectChol + TotChol + Poverty +
+    SleepHrsNight + AlcoholYear +
+    Gender + Smoke100 + PhysActive +
+    Gender:Age,
+  data = nhanes_adult
+)
+
+b <- coef(model_prelim)
+slope_f   <- unname(b["Age"])                                # female age slope
+slope_m   <- unname(b["Age"] + b["Age:Gendermale"])          # male age slope
+cross_age <- unname(-b["Gendermale"] / b["Age:Gendermale"])  # age where gap = 0
+mean_age  <- mean(nhanes_adult$Age)
+gap_mean  <- unname(b["Gendermale"] + b["Age:Gendermale"] * mean_age)
+
+kable(
+  tibble(
+    Quantity = c("Female age slope (mm Hg/yr)", "Male age slope (mm Hg/yr)",
+                 "Male − female gap at mean age (mm Hg)",
+                 "Age at which fitted gap reaches 0",
+                 "Participants in model sample"),
+    Value = c(round(slope_f, 3), round(slope_m, 3),
+              round(gap_mean, 2), round(cross_age, 1),
+              nrow(nhanes_adult))
+  ),
+  caption = "Quantities derived from the preliminary model, used in the written discussion."
+)
+```
+
+## 7. Model Results
+
+```{r model-table}
+term_labels <- c(
+  "(Intercept)"    = "Intercept",
+  "Age"            = "Age (years) [female slope]",
+  "BMI"            = "BMI (kg/m²)",
+  "DirectChol"     = "HDL cholesterol (mmol/L)",
+  "TotChol"        = "Total cholesterol (mmol/L)",
+  "Poverty"        = "Poverty ratio",
+  "SleepHrsNight"  = "Sleep (hours/night)",
+  "AlcoholYear"    = "Alcohol (days/year)",
+  "Gendermale"     = "Male (ref = female)",
+  "Smoke100Yes"    = "Ever smoked 100+ cigarettes (ref = no)",
+  "PhysActiveYes"  = "Physically active (ref = no)",
+  "Age:Gendermale" = "Age × Male"
+)
+
+coef_tab <- tidy(model_prelim, conf.int = TRUE) %>%
+  mutate(
+    term    = recode(term, !!!term_labels),
+    `95% CI` = sprintf("[%.3f, %.3f]", conf.low, conf.high),
+    p.value = ifelse(p.value < 0.001, "< 0.001", sprintf("%.3f", p.value))
+  ) %>%
+  select(Predictor = term, Estimate = estimate, SE = std.error,
+         `95% CI`, `p-value` = p.value)
+
+fit <- glance(model_prelim)
+
+kable(
+  coef_tab, digits = 3, align = "lrrcr",
+  caption = sprintf(
+    "Table 1. Preliminary model of systolic blood pressure (mm Hg), adults 20+, n = %s. R² = %.3f, adjusted R² = %.3f, residual SE = %.2f.",
+    format(nobs(model_prelim), big.mark = ","), fit$r.squared,
+    fit$adj.r.squared, fit$sigma)
+)
+```
+
+```{r save-table-png, include = FALSE}
+# export the coefficient table as an image for the written proposal.
+if (requireNamespace("gridExtra", quietly = TRUE)) {
+  png("table1_coefficients.png", width = 1700, height = 750, res = 200)
+  gridExtra::grid.table(coef_tab %>% mutate(across(c(Estimate, SE), ~ round(.x, 3))),
+                        rows = NULL)
+  dev.off()
+}
+```
+
+## 8. Assumption Assessment
+
+**We do not correct any violations at this stage.**
+
+We first check the two conditions that tell us whether residual plots can be trusted,
+then the four assumptions.
+
+### 8.1 Conditions
+
+```{r conditions, fig.width = 6, fig.height = 5}
+# Condition 1: conditional mean response is a single function of the linear predictor
+plot(fitted(model_prelim), nhanes_adult$BPSysAve,
+     main = "Observed vs Fitted", xlab = "Fitted SBP (mm Hg)",
+     ylab = "Observed SBP (mm Hg)", pch = ".", col = rgb(0, 0, 0, 0.3))
+abline(0, 1, col = "red", lty = 2)
+```
+
+```{r pairs-plot, fig.width = 7, fig.height = 7}
+# Condition 2: no non-linear relationships among the predictors
+pairs(nhanes_adult[, num_vars], pch = ".", col = rgb(0, 0, 0, 0.3),
+      main = "Pairwise plots of numeric predictors", gap = 0.3)
+```
+
+### 8.2 Residual plots
+
+```{r resid-fitted-qq, fig.width = 10, fig.height = 4}
+par(mfrow = c(1, 2))
+plot(fitted(model_prelim), resid(model_prelim),
+     main = "Residuals vs Fitted", xlab = "Fitted SBP (mm Hg)", ylab = "Residuals",
+     pch = ".", col = rgb(0, 0, 0, 0.3))
+abline(h = 0, col = "red", lty = 2)
+qqnorm(rstandard(model_prelim), main = "Normal Q-Q",
+       xlab = "Theoretical quantiles", ylab = "Standardized residuals",
+       pch = ".", col = rgb(0, 0, 0, 0.3))
+qqline(rstandard(model_prelim), col = "red", lty = 2)
+par(mfrow = c(1, 1))
+```
+
+```{r resid-predictors-num, fig.width = 11, fig.height = 5}
+par(mfrow = c(2, 4))
+for (v in num_vars) {
+  plot(nhanes_adult[[v]], resid(model_prelim),
+       main = paste("Residuals vs", v), xlab = v, ylab = "Residuals",
+       pch = ".", col = rgb(0, 0, 0, 0.3))
+  abline(h = 0, col = "red", lty = 2)
+}
+par(mfrow = c(1, 1))
+```
+
+```{r resid-predictors-cat, fig.width = 8, fig.height = 3.5}
+par(mfrow = c(1, 3))
+for (v in cat_vars) {
+  boxplot(resid(model_prelim) ~ nhanes_adult[[v]],
+          main = paste("Residuals vs", v), xlab = v, ylab = "Residuals",
+          col = "grey85")
+  abline(h = 0, col = "red", lty = 2)
+}
+par(mfrow = c(1, 1))
+```
+
+```{r spread-check}
+diag_df %>%
+  mutate(`Fitted quintile` = ntile(.fitted, 5)) %>%
+  group_by(`Fitted quintile`) %>%
+  summarise(`Fitted range` = sprintf("%.0f–%.0f", min(.fitted), max(.fitted)),
+            `Residual SD` = round(sd(.resid), 2), .groups = "drop") %>%
+  kable(caption = "Residual spread by fitted-value quintile.")
+```
+
+## 9. Addressing Non-linearity in Age
+
+The residuals vs Age plot in Section 8 shows a U-shaped pattern, suggesting the relationship between SBP and Age is not purely linear. We add a quadratic term `I(Age^2)` and its interaction with Gender to allow the curvature to differ by sex.
+
+```{r fit-quad}
+model_quad <- lm(
+  BPSysAve ~ Age + I(Age^2) + BMI + DirectChol + TotChol + Poverty +
+    SleepHrsNight + AlcoholYear +
+    Gender + Smoke100 + PhysActive +
+    Gender:Age + Gender:I(Age^2),
+  data = nhanes_adult
+)
+```
+
+```{r compare-models}
+fit_prelim <- glance(model_prelim)
+fit_quad   <- glance(model_quad)
+
+tibble(
+  Model        = c("Linear Age", "Quadratic Age"),
+  `R²`         = round(c(fit_prelim$r.squared, fit_quad$r.squared), 4),
+  `Adj. R²`    = round(c(fit_prelim$adj.r.squared, fit_quad$adj.r.squared), 4),
+  AIC          = round(c(fit_prelim$AIC, fit_quad$AIC), 1),
+  `Resid. SE`  = round(c(fit_prelim$sigma, fit_quad$sigma), 3)
+) %>%
+  kable(caption = "Model comparison: linear vs quadratic Age term.")
+```
+
+Adding the quadratic Age terms yields a modest improvement in fit: R² increases from `r round(fit_prelim$r.squared, 4)` to `r round(fit_quad$r.squared, 4)` (a gain of `r round(fit_quad$r.squared - fit_prelim$r.squared, 4)`), and adjusted R² from `r round(fit_prelim$adj.r.squared, 4)` to `r round(fit_quad$adj.r.squared, 4)`. The AIC drops by `r round(fit_prelim$AIC - fit_quad$AIC, 1)` points, which is considered substantial (> 10), and residual SE decreases from `r round(fit_prelim$sigma, 3)` to `r round(fit_quad$sigma, 3)` mm Hg. While the absolute gain in explained variance is small, the consistent improvement across all metrics suggests the quadratic term is capturing a real, if modest, non-linearity in the age–SBP relationship.
+
+```{r resid-quad, fig.width = 10, fig.height = 4}
+par(mfrow = c(1, 2))
+plot(fitted(model_quad), resid(model_quad),
+     main = "Residuals vs Fitted (Quadratic)", xlab = "Fitted SBP (mm Hg)", ylab = "Residuals",
+     pch = ".", col = rgb(0, 0, 0, 0.3))
+abline(h = 0, col = "red", lty = 2)
+plot(nhanes_adult$Age, resid(model_quad),
+     main = "Residuals vs Age (Quadratic)", xlab = "Age (years)", ylab = "Residuals",
+     pch = ".", col = rgb(0, 0, 0, 0.3))
+abline(h = 0, col = "red", lty = 2)
+par(mfrow = c(1, 1))
+```
+
+## 10. Box-Cox Transformation
+
+### 10.1 Response Transformation
+
+We apply Box-Cox to the preliminary model to determine whether a transformation of SBP would better satisfy the normality assumption.
+
+```{r boxcox-response, fig.width = 6, fig.height = 4.5}
+####################################
+### uncomment and run to view Box-Cox profile, then comment back ###
+summary(powerTransform(model_prelim))
+MASS::boxcox(model_prelim, lambda = seq(-2, 2, by = 0.05))
+####################################
+
+suppressWarnings(summary(powerTransform(model_prelim)))
+```
+
+The output suggests $\lambda \approx -1$, and $\lambda = 1$ (no transformation) falls outside the 95% CI. We round to the nearest interpretable value: $\lambda = -1$, i.e. an **inverse transformation** $1/\text{SBP}$ (n = `r nrow(nhanes_adult)`).
+
+```{r boxcox-apply}
+# transform response
+SBP_inv <- 1 / nhanes_adult$BPSysAve
+
+# refit model with transformed response
+model_bc <- lm(
+  SBP_inv ~ Age + BMI + DirectChol + TotChol + Poverty +
+    SleepHrsNight + AlcoholYear +
+    Gender + Smoke100 + PhysActive +
+    Gender:Age,
+  data = nhanes_adult
+)
+```
+
+#### Residuals vs Fitted and Q-Q Plot
+
+```{r bc-resid-qq, fig.width = 10, fig.height = 4}
+par(mfrow = c(1, 2))
+plot(fitted(model_bc), resid(model_bc),
+     main = "Residuals vs Fitted (Inverse SBP)",
+     xlab = "Fitted 1/SBP", ylab = "Residuals",
+     pch = ".", col = rgb(0, 0, 0, 0.3))
+abline(h = 0, col = "red", lty = 2)
+qqnorm(rstandard(model_bc), main = "Normal Q-Q (Inverse SBP)",
+       xlab = "Theoretical quantiles", ylab = "Standardized residuals",
+       pch = ".", col = rgb(0, 0, 0, 0.3))
+qqline(rstandard(model_bc), col = "red", lty = 2)
+par(mfrow = c(1, 1))
+```
+
+#### Residuals vs Predictors
+
+```{r bc-resid-num, fig.width = 11, fig.height = 5}
+par(mfrow = c(2, 4))
+for (v in num_vars) {
+  plot(nhanes_adult[[v]], resid(model_bc),
+       main = paste("Residuals vs", v), xlab = v, ylab = "Residuals",
+       pch = ".", col = rgb(0, 0, 0, 0.3))
+  abline(h = 0, col = "red", lty = 2)
+}
+par(mfrow = c(1, 1))
+```
+
+```{r bc-resid-cat, fig.width = 8, fig.height = 3.5}
+par(mfrow = c(1, 3))
+for (v in cat_vars) {
+  boxplot(resid(model_bc) ~ nhanes_adult[[v]],
+          main = paste("Residuals vs", v), xlab = v, ylab = "Residuals",
+          col = "grey85")
+  abline(h = 0, col = "red", lty = 2)
+}
+par(mfrow = c(1, 1))
+```
+
+#### Constant Variance Check
+
+```{r bc-spread-check}
+data.frame(fitted_bc = fitted(model_bc), resid_bc = resid(model_bc)) %>%
+  mutate(quintile = ntile(fitted_bc, 5)) %>%
+  group_by(quintile) %>%
+  summarise(`Fitted range` = sprintf("%.5f–%.5f", min(fitted_bc), max(fitted_bc)),
+            `Residual SD` = round(sd(resid_bc), 6), .groups = "drop") %>%
+  kable(caption = "Residual spread by fitted-value quintile (inverse SBP model).")
+```
+
+### 10.2 Predictor Transformations
+
+`MASS::boxcox()` only assesses the response. We use `car::powerTransform()` to check whether any numeric predictors also need transforming. `AlcoholYear` and `Poverty` contain zeros and are excluded.
+
+```{r power-transform}
+library(car)
+pos_vars <- c("Age", "BMI", "DirectChol", "TotChol", "SleepHrsNight")
+
+####################################
+### uncomment and run to view suggested lambdas, then comment back ###
+summary(powerTransform(nhanes_adult[, pos_vars]))
+####################################
+```
+
+The output suggests: Age $\approx 1/3$ (cube root), DirectChol $\approx 0$ (log), TotChol $\approx 0$ (log), SleepHrsNight $\approx 3/2$. BMI's CI does not include a clean value so it is left untransformed.
+
+```{r power-transform-apply}
+# apply rounded lambdas
+Age_bc        <- nhanes_adult$Age^(1/3)
+DirectChol_bc <- log(nhanes_adult$DirectChol)
+TotChol_bc    <- log(nhanes_adult$TotChol)
+SleepHrs_bc   <- nhanes_adult$SleepHrsNight^(3/2)
+
+# refit model with both response and predictor transformations
+model_all_bc <- lm(
+  SBP_inv ~ Age_bc + BMI + DirectChol_bc + TotChol_bc + Poverty +
+    SleepHrs_bc + AlcoholYear +
+    Gender + Smoke100 + PhysActive +
+    Gender:Age_bc,
+  data = nhanes_adult
+)
+```
+
+### 10.3 Model Comparison
+
+We compare three models side by side: untransformed, response-only transformed (1/SBP), and fully transformed (1/SBP + predictor transformations). Each row shows residuals against a different variable; each column is a model.
+
+```{r boxcox-compare, fig.width = 10, fig.height = 13}
+par(mfrow = c(5, 3))
+
+# row 1: residuals vs fitted
+plot(fitted(model_prelim), resid(model_prelim), main = "Untransformed",
+     xlab = "Fitted", ylab = "Residuals", pch = ".", col = rgb(0,0,0,0.3))
+abline(h = 0, col = "red", lty = 2)
+plot(fitted(model_bc), resid(model_bc), main = "Transformed Y only",
+     xlab = "Fitted", ylab = "Residuals", pch = ".", col = rgb(0,0,0,0.3))
+abline(h = 0, col = "red", lty = 2)
+plot(fitted(model_all_bc), resid(model_all_bc), main = "All Transformed",
+     xlab = "Fitted", ylab = "Residuals", pch = ".", col = rgb(0,0,0,0.3))
+abline(h = 0, col = "red", lty = 2)
+
+# row 2: residuals vs Age
+plot(nhanes_adult$Age, resid(model_prelim), main = "Untransformed",
+     xlab = "Age", ylab = "Residuals", pch = ".", col = rgb(0,0,0,0.3))
+abline(h = 0, col = "red", lty = 2)
+plot(nhanes_adult$Age, resid(model_bc), main = "Transformed Y only",
+     xlab = "Age", ylab = "Residuals", pch = ".", col = rgb(0,0,0,0.3))
+abline(h = 0, col = "red", lty = 2)
+plot(Age_bc, resid(model_all_bc), main = "All Transformed",
+     xlab = "Age^(1/3)", ylab = "Residuals", pch = ".", col = rgb(0,0,0,0.3))
+abline(h = 0, col = "red", lty = 2)
+
+# row 3: residuals vs DirectChol
+plot(nhanes_adult$DirectChol, resid(model_prelim), main = "Untransformed",
+     xlab = "DirectChol", ylab = "Residuals", pch = ".", col = rgb(0,0,0,0.3))
+abline(h = 0, col = "red", lty = 2)
+plot(nhanes_adult$DirectChol, resid(model_bc), main = "Transformed Y only",
+     xlab = "DirectChol", ylab = "Residuals", pch = ".", col = rgb(0,0,0,0.3))
+abline(h = 0, col = "red", lty = 2)
+plot(DirectChol_bc, resid(model_all_bc), main = "All Transformed",
+     xlab = "log(DirectChol)", ylab = "Residuals", pch = ".", col = rgb(0,0,0,0.3))
+abline(h = 0, col = "red", lty = 2)
+
+# row 4: residuals vs TotChol
+plot(nhanes_adult$TotChol, resid(model_prelim), main = "Untransformed",
+     xlab = "TotChol", ylab = "Residuals", pch = ".", col = rgb(0,0,0,0.3))
+abline(h = 0, col = "red", lty = 2)
+plot(nhanes_adult$TotChol, resid(model_bc), main = "Transformed Y only",
+     xlab = "TotChol", ylab = "Residuals", pch = ".", col = rgb(0,0,0,0.3))
+abline(h = 0, col = "red", lty = 2)
+plot(TotChol_bc, resid(model_all_bc), main = "All Transformed",
+     xlab = "log(TotChol)", ylab = "Residuals", pch = ".", col = rgb(0,0,0,0.3))
+abline(h = 0, col = "red", lty = 2)
+
+# row 5: residuals vs SleepHrsNight
+plot(nhanes_adult$SleepHrsNight, resid(model_prelim), main = "Untransformed",
+     xlab = "SleepHrsNight", ylab = "Residuals", pch = ".", col = rgb(0,0,0,0.3))
+abline(h = 0, col = "red", lty = 2)
+plot(nhanes_adult$SleepHrsNight, resid(model_bc), main = "Transformed Y only",
+     xlab = "SleepHrsNight", ylab = "Residuals", pch = ".", col = rgb(0,0,0,0.3))
+abline(h = 0, col = "red", lty = 2)
+plot(SleepHrs_bc, resid(model_all_bc), main = "All Transformed",
+     xlab = "Sleep^(3/2)", ylab = "Residuals", pch = ".", col = rgb(0,0,0,0.3))
+abline(h = 0, col = "red", lty = 2)
+
+par(mfrow = c(1, 1))
+```
+
+```{r boxcox-qq, fig.width = 10, fig.height = 4}
+par(mfrow = c(1, 3))
+qqnorm(rstandard(model_prelim), main = "Untransformed",
+       pch = ".", col = rgb(0,0,0,0.3))
+qqline(rstandard(model_prelim), col = "red", lty = 2)
+qqnorm(rstandard(model_bc), main = "Transformed Y only",
+       pch = ".", col = rgb(0,0,0,0.3))
+qqline(rstandard(model_bc), col = "red", lty = 2)
+qqnorm(rstandard(model_all_bc), main = "All Transformed",
+       pch = ".", col = rgb(0,0,0,0.3))
+qqline(rstandard(model_all_bc), col = "red", lty = 2)
+par(mfrow = c(1, 1))
+```
+
