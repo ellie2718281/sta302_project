@@ -712,3 +712,205 @@ qqline(rstandard(model_all_bc), col = "red", lty = 2)
 par(mfrow = c(1, 1))
 ```
 
+---
+
+## 11. Leverage, Outliers, Influence and Collinearity
+
+Note: use the current working model: 1/SBP response, transformed predictors, Age x Gender interaction.
+(If we add Age^2 or switch to log(BMI) etc. later, rebuild `nhanes_t` and `model_work` and rerun this section.)
+
+```{r work-data}
+library(car)
+
+# Put every transformed variable INSIDE a data frame, so that refits on a subset
+# (dropping unusual points) and influence measures work properly.
+nhanes_t <- nhanes_adult %>%
+  mutate(SBP_inv       = 1 / BPSysAve,
+         Age_bc        = Age^(1/3),
+         DirectChol_bc = log(DirectChol),
+         TotChol_bc    = log(TotChol),
+         SleepHrs_bc   = SleepHrsNight^(3/2))
+
+model_work <- lm(
+  SBP_inv ~ Age_bc + BMI + DirectChol_bc + TotChol_bc + Poverty +
+    SleepHrs_bc + AlcoholYear + Gender + Smoke100 + PhysActive +
+    Gender:Age_bc,
+  data = nhanes_t
+)
+
+n <- nobs(model_work)
+p <- length(coef(model_work)) - 1          # number of predictors (columns of X minus intercept)
+```
+
+### 11.1 Leverage
+
+High leverage = unusual combination of predictor values.
+Rule of thumb: h_ii > 2(p+1)/n is "high", h_ii > 3(p+1)/n is "very high"; h_ii close to 1 is extreme.
+
+```{r leverage, fig.width = 8, fig.height = 4}
+h <- hatvalues(model_work)
+h_cut <- 2 * (p + 1) / n
+
+cat("Cutoff 2(p+1)/n =", round(h_cut, 4), "\n")
+cat("High leverage points (> 2(p+1)/n):", sum(h > h_cut), "\n")
+cat("Very high leverage (> 3(p+1)/n):  ", sum(h > 1.5 * h_cut), "\n")
+cat("Maximum leverage:", round(max(h), 4), "\n")
+
+plot(h, pch = ".", cex = 3, col = rgb(0, 0, 0, 0.4),
+     main = "Leverage (hat values)", xlab = "Observation", ylab = expression(h[ii]))
+abline(h = c(h_cut, 1.5 * h_cut), col = c("orange", "red"), lty = 2)
+```
+
+```{r leverage-who}
+# Which predictor values make these points unusual?
+nhanes_t %>%
+  mutate(row = row_number(), leverage = h) %>%
+  arrange(desc(leverage)) %>%
+  select(row, leverage, BPSysAve, Age, BMI, DirectChol, TotChol, Poverty,
+         SleepHrsNight, AlcoholYear, Gender) %>%
+  head(15) %>%
+  kable(digits = 3, caption = "15 highest-leverage observations.")
+```
+
+### 11.2 Outliers (standardized residuals)
+
+Under normal errors, about 5% of |r_i| exceed 2 and about 0.3% exceed 3. Many more than that, or any beyond ~4,
+deserve a look.
+
+```{r outliers, fig.width = 10, fig.height = 4}
+r <- rstandard(model_work)
+
+tibble(Threshold = c("|r| > 2", "|r| > 3", "|r| > 4"),
+       Count     = c(sum(abs(r) > 2), sum(abs(r) > 3), sum(abs(r) > 4)),
+       Percent   = round(100 * Count / n, 2),
+       `Expected if normal (%)` = c(4.55, 0.27, 0.006)) %>%
+  kable(caption = "Standardized-residual outliers.")
+
+par(mfrow = c(1, 2))
+plot(fitted(model_work), r, pch = ".", cex = 3, col = rgb(0, 0, 0, 0.4),
+     main = "Standardized residuals vs Fitted", xlab = "Fitted 1/SBP", ylab = "Standardized residual")
+abline(h = c(-3, 3), col = "red", lty = 2)
+plot(h, r, pch = ".", cex = 3, col = rgb(0, 0, 0, 0.4),
+     main = "Leverage vs standardized residual", xlab = "Leverage", ylab = "Standardized residual")
+abline(h = c(-3, 3), v = h_cut, col = "red", lty = 2)   # top-right/bottom-right = "bad" leverage
+par(mfrow = c(1, 1))
+```
+
+```{r outliers-who}
+# Inspect the extreme ones on the ORIGINAL scale: are they clinically possible?
+nhanes_t %>%
+  mutate(row = row_number(), std_resid = r) %>%
+  filter(abs(std_resid) > 3) %>%
+  arrange(desc(abs(std_resid))) %>%
+  select(row, std_resid, BPSysAve, Age, Gender, BMI, DirectChol, TotChol, Poverty) %>%
+  head(20) %>%
+  kable(digits = 2, caption = "Observations with |standardized residual| > 3.")
+```
+
+### 11.3 Influence
+
+A point matters most when it has BOTH high leverage and a large residual. Cook's distance and DFFITS combine
+the two; DFBETAS shows the effect on each coefficient (we care most about the Age x Gender term).
+
+```{r influence, fig.width = 10, fig.height = 4}
+cd <- cooks.distance(model_work)
+dffits_v <- dffits(model_work)
+dfb <- dfbetas(model_work)
+
+cd_cut     <- 4 / n
+dffits_cut <- 2 * sqrt((p + 1) / n)
+dfb_cut    <- 2 / sqrt(n)
+int_col    <- "Age_bc:Gendermale"          # check names(coef(model_work)) if this errors
+
+cat("Cook's D > 4/n:        ", sum(cd > cd_cut), "\n")
+cat("Cook's D > 0.5 (strong):", sum(cd > 0.5), "  Max Cook's D:", round(max(cd), 4), "\n")
+cat("|DFFITS| > 2*sqrt((p+1)/n):", sum(abs(dffits_v) > dffits_cut), "\n")
+cat("|DFBETAS| > 2/sqrt(n) for the Age x Gender term:", sum(abs(dfb[, int_col]) > dfb_cut), "\n")
+
+par(mfrow = c(1, 2))
+plot(cd, type = "h", main = "Cook's distance", xlab = "Observation", ylab = "Cook's D")
+abline(h = cd_cut, col = "red", lty = 2)
+plot(dfb[, int_col], type = "h", main = "DFBETAS: Age x Male", xlab = "Observation", ylab = "DFBETAS")
+abline(h = c(-dfb_cut, dfb_cut), col = "red", lty = 2)
+par(mfrow = c(1, 1))
+```
+
+### 11.4 Refit without unusual points
+
+We keep clinically plausible readings by default. Here we only check how much the conclusions depend on
+the flagged points: drop (a) Cook's D > 4/n, and (b) high-leverage points with |r| > 3, and compare.
+
+```{r refit-without}
+drop_idx <- which(cd > cd_cut | (h > h_cut & abs(r) > 3))
+cat("Observations removed for sensitivity check:", length(drop_idx),
+    sprintf("(%.1f%% of n)\n", 100 * length(drop_idx) / n))
+
+model_trim <- update(model_work, data = nhanes_t[-drop_idx, ])
+
+comp <- bind_rows(
+  tidy(model_work, conf.int = TRUE) %>% mutate(Model = "Full"),
+  tidy(model_trim, conf.int = TRUE) %>% mutate(Model = "Without flagged")
+) %>%
+  select(Model, term, estimate, conf.low, conf.high, p.value) %>%
+  pivot_wider(names_from = Model,
+              values_from = c(estimate, conf.low, conf.high, p.value)) %>%
+  mutate(`% change in estimate` =
+           round(100 * (`estimate_Without flagged` - estimate_Full) / abs(estimate_Full), 1))
+
+comp %>%
+  select(term, estimate_Full, `estimate_Without flagged`, `% change in estimate`,
+         p.value_Full, `p.value_Without flagged`) %>%
+  kable(digits = 5, caption = "Coefficients with and without influential points.")
+
+# any change in significance or sign?
+comp %>%
+  filter((p.value_Full < 0.05) != (`p.value_Without flagged` < 0.05) |
+           sign(estimate_Full) != sign(`estimate_Without flagged`)) %>%
+  select(term, estimate_Full, `estimate_Without flagged`, p.value_Full, `p.value_Without flagged`)
+```
+
+```{r refit-plots, fig.width = 10, fig.height = 4}
+par(mfrow = c(1, 2))
+plot(fitted(model_trim), resid(model_trim), pch = ".", cex = 3, col = rgb(0, 0, 0, 0.4),
+     main = "Residuals vs Fitted (without flagged)", xlab = "Fitted", ylab = "Residuals")
+abline(h = 0, col = "red", lty = 2)
+qqnorm(rstandard(model_trim), pch = ".", cex = 3, col = rgb(0, 0, 0, 0.4),
+       main = "Normal Q-Q (without flagged)")
+qqline(rstandard(model_trim), col = "red", lty = 2)
+par(mfrow = c(1, 1))
+```
+
+### 11.5 Collinearity
+
+Three tools: the pairs plot (already in 8.1) plus a correlation matrix, VIFs, and comparing the individual
+t-tests with the overall F-test. Note: VIFs are inflated by construction for terms involved in an interaction
+(Age and Age x Gender), so we compute VIFs from the model WITHOUT the interaction.
+
+```{r collinearity}
+cor_mat <- cor(nhanes_t[, c("Age", "BMI", "DirectChol", "TotChol", "Poverty",
+                            "SleepHrsNight", "AlcoholYear")])
+kable(round(cor_mat, 2), caption = "Correlation matrix of numeric predictors (original scale).")
+
+model_noint <- update(model_work, . ~ . - Gender:Age_bc)
+vif_tab <- car::vif(model_noint)
+kable(round(vif_tab, 2), caption = "VIF (GVIF for factors) from the model without the interaction. > 5 is a concern, > 10 is severe.")
+
+# Overall F-test vs individual t-tests: a significant F with few significant t's is a collinearity warning sign
+fs <- summary(model_work)$fstatistic
+cat("Overall F =", round(fs[1], 1), "on", fs[2], "and", fs[3], "df, p =",
+    format.pval(pf(fs[1], fs[2], fs[3], lower.tail = FALSE)), "\n")
+cat("Predictors with t-test p < 0.05:", sum(tidy(model_work)$p.value[-1] < 0.05), "of", p, "\n")
+
+# Do the standard errors of the key terms change if we drop the most correlated predictor?
+# (e.g. TotChol vs DirectChol; edit to match whatever your VIF/correlations flag)
+se_full <- tidy(model_work)$std.error
+se_drop <- tidy(update(model_work, . ~ . - TotChol_bc))
+kable(tibble(term = tidy(model_work)$term[tidy(model_work)$term %in% se_drop$term],
+             SE_full = se_full[tidy(model_work)$term %in% se_drop$term],
+             SE_without_TotChol = se_drop$std.error),
+      digits = 5, caption = "Effect of dropping TotChol on standard errors.")
+```
+
+### 11.6 Summary of findings
+
+Summary of findings is saved in results/section11_results.txt
