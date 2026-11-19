@@ -13,6 +13,9 @@ knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE,
 ```
 
 ```{r packages}
+install.packages("NHANES")
+install.packages("patchwork")
+install.packages("car")
 library(NHANES)
 library(dplyr)
 library(tidyr)
@@ -21,6 +24,7 @@ library(ggplot2)
 library(broom)
 library(knitr)
 library(patchwork)
+library(car)
 ```
 
 ## 1. Data Preparation
@@ -377,7 +381,7 @@ term_labels <- c(
 
 coef_tab <- tidy(model_prelim, conf.int = TRUE) %>%
   mutate(
-    term    = recode(term, !!!term_labels),
+    term    = dplyr::recode(term, !!!term_labels),
     `95% CI` = sprintf("[%.3f, %.3f]", conf.low, conf.high),
     p.value = ifelse(p.value < 0.001, "< 0.001", sprintf("%.3f", p.value))
   ) %>%
@@ -466,6 +470,7 @@ par(mfrow = c(1, 1))
 ```
 
 ```{r spread-check}
+diag_df <- augment(model_prelim)
 diag_df %>%
   mutate(`Fitted quintile` = ntile(.fitted, 5)) %>%
   group_by(`Fitted quintile`) %>%
@@ -605,7 +610,6 @@ data.frame(fitted_bc = fitted(model_bc), resid_bc = resid(model_bc)) %>%
 `MASS::boxcox()` only assesses the response. We use `car::powerTransform()` to check whether any numeric predictors also need transforming. `AlcoholYear` and `Poverty` contain zeros and are excluded.
 
 ```{r power-transform}
-library(car)
 pos_vars <- c("Age", "BMI", "DirectChol", "TotChol", "SleepHrsNight")
 
 ####################################
