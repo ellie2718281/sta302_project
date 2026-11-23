@@ -1,0 +1,11 @@
+"","round(vif_tab, 2)"
+"Age_bc",1.15
+"BMI",1.19
+"DirectChol_bc",1.47
+"TotChol_bc",1.06
+"Poverty",1.15
+"SleepHrs_bc",1.02
+"AlcoholYear",1.19
+"Gender",1.23
+"Smoke100",1.09
+"PhysActive",1.14

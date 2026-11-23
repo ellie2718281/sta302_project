@@ -1,0 +1,5 @@
+"Step","Rows remaining","Rows removed"
+"Raw data",10000,NA
+"Age >= 20",7235,2765
+"Complete cases (no missing in any model variable)",5131,2104
+"Unique participant IDs",3203,1928
