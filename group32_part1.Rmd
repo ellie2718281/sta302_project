@@ -888,19 +888,23 @@ cat("Results written to results/section11_results.txt\n")
 
 ## 11. Final Model: Predictor Selection, Interaction Retest, Curvature and Final Checks
 
-### 11.1 Reduced model: partial F-test
+
+### 11.1 Reduced model: partial F-test and the size of the dropped effects
 
 ```{r reduced-model}
 model_red <- update(model_work,
                     . ~ . - DirectChol_bc - SleepHrs_bc - Smoke100 - PhysActive)
 
+# Both main effects of the interaction stay in the model
 c(Age_bc_kept = "Age_bc" %in% names(coef(model_red)),
   Gender_kept = "Gendermale" %in% names(coef(model_red)))
 
+# Partial F-test. H0: the four dropped coefficients are all 0
 pf_out <- anova(model_red, model_work)
 cat(sprintf("Partial F-test (drop DirectChol, SleepHrs, Smoke100, PhysActive): F(%d, %d) = %.3f, p = %.3f\n",
             pf_out$Df[2], pf_out$Res.Df[2], pf_out$F[2], pf_out$`Pr(>F)`[2]))
 
+# Overall F-test of each model (H0: all slopes = 0), to quote in the text
 overall_F <- function(m, label) {
   fs <- summary(m)$fstatistic
   cat(sprintf("Overall F-test, %s: F(%d, %d) = %.1f, p = %.2g\n", label, fs[2], fs[3], fs[1],
@@ -917,23 +921,47 @@ coef_cmp <- full_join(
               Red_CI = sprintf("[%.5f, %.5f]", conf.low, conf.high), Red_p = p.value),
   by = "term")
 kable(coef_cmp, digits = 5, caption = "Coefficients, full vs reduced model (NA = predictor dropped).")
-write.csv(coef_cmp, "results/table2_full_vs_reduced.csv", row.names = FALSE)
 ```
 
-### 11.2 Retest the Age x Gender interaction (reduced model, linear in Age^(1/3))
+The 1/SBP scale has no natural yardstick for a "negligible" effect, so we compare each dropped predictor with the Age
+effect. For each one we take the end of its 95% CI that is farthest from 0 and multiply it by a typical spread of the
+predictor (its interquartile range, or 1 for a yes/no variable). We compare that with the change in 1/SBP for women
+across the interquartile range of Age^(1/3). This comparison is our judgment, not a rule from the course. Dropping all
+four predictors is also our judgment, supported by the partial F-test and this table.
+
+```{r dropped-yardstick}
+drop_terms <- c("DirectChol_bc", "SleepHrs_bc", "Smoke100Yes", "PhysActiveYes")
+spread_used <- c(DirectChol_bc = IQR(nhanes_t$DirectChol_bc), SleepHrs_bc = IQR(nhanes_t$SleepHrs_bc),
+                 Smoke100Yes = 1, PhysActiveYes = 1)
+ci_full <- confint(model_work)[drop_terms, ]
+age_effect <- abs(unname(coef(model_work)["Age_bc"])) * IQR(nhanes_t$Age_bc)
+
+yard <- tibble(Predictor = drop_terms, Spread = unname(spread_used),
+               CI_low = ci_full[, 1], CI_high = ci_full[, 2]) %>%
+  mutate(`Largest plausible effect` = pmax(abs(CI_low), abs(CI_high)) * Spread,
+         `% of Age effect` = 100 * `Largest plausible effect` / age_effect)
+kable(yard, digits = c(0, 3, 5, 5, 6, 1),
+      caption = "Largest plausible effect of each dropped predictor, compared with the Age effect (women, Age IQR).")
+```
+
+### 11.2 Retest the Age x Gender interaction (first look: reduced model, linear in Age^(1/3))
+
+The plot below is unadjusted: it shows 1/SBP against Age^(1/3) by gender without the other predictors. The t-test
+that follows is adjusted for the other predictors in each model. The headline interaction result comes from the
+joint test in 12.3 on the chosen model, not from this table.
 
 ```{r interaction-plot, fig.width = 7, fig.height = 4.5}
-p_int <- ggplot(nhanes_t, aes(x = Age_bc, y = SBP_inv, colour = Gender)) +
+ggplot(nhanes_t, aes(x = Age_bc, y = SBP_inv, colour = Gender)) +
   geom_point(alpha = 0.15, size = 0.8) +
   geom_smooth(method = "lm", se = FALSE, linewidth = 1.1) +
-  labs(title = "1/SBP vs Age^(1/3) by gender", x = "Age^(1/3)", y = "1/SBP") +
+  labs(title = "1/SBP vs Age^(1/3) by gender (unadjusted)", x = "Age^(1/3)", y = "1/SBP") +
   theme_bw()
-print(p_int)
 ```
 
 ```{r interaction-retest}
 int_name <- "Age_bc:Gendermale"
 
+# t-test of H0: beta_int = 0, conditional on the other predictors in each model
 get_int <- function(m, label, term = int_name) {
   s  <- summary(m)$coefficients[term, ]
   ci <- confint(m)[term, ]
@@ -942,8 +970,10 @@ get_int <- function(m, label, term = int_name) {
          CI_low = unname(ci[1]), CI_high = unname(ci[2]))
 }
 kable(bind_rows(get_int(model_work, "Full"), get_int(model_red, "Reduced")),
-      digits = 6, caption = "t-test of the Age x Gender interaction (1/SBP scale), full and reduced models.")
+      digits = 6, caption = "First look: t-test of the Age x Gender interaction (1/SBP scale), linear models.")
 
+# Age slope for each gender: female = beta_Age, male = beta_Age + beta_int
+# (the CI uses Var and Cov of the estimates)
 slope_tab <- function(m, label) {
   b <- coef(m); V <- vcov(m); tq <- qt(0.975, df.residual(m))
   f_est <- unname(b["Age_bc"]);               f_se <- sqrt(V["Age_bc", "Age_bc"])
@@ -953,54 +983,86 @@ slope_tab <- function(m, label) {
          CI_low = Slope - tq * SE, CI_high = Slope + tq * SE)
 }
 kable(bind_rows(slope_tab(model_work, "Full"), slope_tab(model_red, "Reduced")),
-      digits = 6, caption = "Slope of 1/SBP per unit of Age^(1/3), by gender.")
+      digits = 6, caption = "First look: slope of 1/SBP per unit of Age^(1/3) by gender (linear models).")
 
-model_red_noint <- update(model_red, . ~ . - Gender:Age_bc)
-vif_red <- car::vif(model_red_noint)
-kable(round(vif_red, 2),
-      caption = "VIF (GVIF for factors) of the reduced model without the interaction. > 5 is a concern, > 10 is severe.")
-write.csv(as.data.frame(round(vif_red, 2)), "results/vif_model_red.csv")
+# VIF (Module 7): VIF_j = 1 / (1 - R_j^2), where R_j^2 comes from regressing predictor j on the
+# remaining predictors. Numeric predictors only; the interaction is left out (structural
+# multicollinearity). Concern if VIF > 5.
+num_f <- c("Age_bc", "BMI", "TotChol_bc", "Poverty", "AlcoholYear")
+vif_num <- sapply(num_f, function(v) {
+  others <- c(setdiff(num_f, v), "Gender")
+  r2 <- summary(lm(reformulate(others, response = v), data = nhanes_t))$r.squared
+  1 / (1 - r2)
+})
+kable(data.frame(VIF = round(vif_num, 2)),
+      caption = "VIF of the numeric predictors, reduced model without the interaction.")
 ```
 
 ### 11.3 Curvature in Age: do we need Age^2 and Age^2 x Gender?
 
+Age and Age^2 are mathematically related, so their correlation is structural multicollinearity (Module 7), and we do not
+interpret their VIFs. VIF is checked on the model without the squared term (12.2). The squared terms are judged by
+partial F-tests and fitted curves, not by their individual coefficients.
+
 ```{r age2-models}
+# candidates: linear -> + Age^2 -> + Age^2 x Gender
 model_qc1   <- lm(SBP_inv ~ Age_bc + I(Age_bc^2) + Gender + Age_bc:Gender +
                     BMI + TotChol_bc + Poverty + AlcoholYear, data = nhanes_t)
-model_final <- lm(SBP_inv ~ Age_bc + I(Age_bc^2) + Gender + Age_bc:Gender + I(Age_bc^2):Gender +
+model_qfull <- lm(SBP_inv ~ Age_bc + I(Age_bc^2) + Gender + Age_bc:Gender + I(Age_bc^2):Gender +
                     BMI + TotChol_bc + Poverty + AlcoholYear, data = nhanes_t)
+# quadratic model with NO Age x Gender terms, to test whether any interaction remains
 model_qn    <- lm(SBP_inv ~ Age_bc + I(Age_bc^2) + Gender +
                     BMI + TotChol_bc + Poverty + AlcoholYear, data = nhanes_t)
 
-int1 <- "Age_bc:Gendermale"; int2 <- "I(Age_bc^2):Gendermale"
-
+# Pairwise partial F-tests: in each, the larger model supplies the residual mean square
 a_age2  <- anova(model_red, model_qc1)       # H0: Age^2 coefficient = 0
-a_age2g <- anova(model_qc1, model_final)     # H0: Age^2 x Gender coefficient = 0
-a_int   <- anova(model_qn, model_final)      # H0: both Age x Gender terms = 0
+a_age2g <- anova(model_qc1, model_qfull)     # H0: Age^2 x Gender coefficient = 0
+a_int   <- anova(model_qn, model_qfull)      # H0: both Age x Gender terms = 0
 kable(tibble(
   Test = c("Age^2 (same curvature for both genders)", "Age^2 x Gender (curvature differs by gender)",
            "Any Age x Gender term (both interaction terms = 0)"),
   df1 = c(a_age2$Df[2], a_age2g$Df[2], a_int$Df[2]),
   df2 = c(a_age2$Res.Df[2], a_age2g$Res.Df[2], a_int$Res.Df[2]),
-  F   = round(c(a_age2$F[2], a_age2g$F[2], a_int$F[2]), 2),
-  p   = format.pval(c(a_age2$`Pr(>F)`[2], a_age2g$`Pr(>F)`[2], a_int$`Pr(>F)`[2]),
-                    eps = 0.001, digits = 3)
-), caption = "Partial F-tests for the Age^2 terms and for the Age x Gender interaction.")
+  F   = c(a_age2$F[2], a_age2g$F[2], a_int$F[2]),
+  p   = c(a_age2$`Pr(>F)`[2], a_age2g$`Pr(>F)`[2], a_int$`Pr(>F)`[2])
+), digits = 4, caption = "Partial F-tests for the Age^2 terms and for the Age x Gender interaction.")
 
 mod_stats <- function(m, label) {
   s <- summary(m)
-  tibble(Model = label, n = as.integer(nobs(m)), p = as.integer(length(coef(m)) - 1),
-         R2 = s$r.squared, Adj_R2 = s$adj.r.squared, Residual_SE = s$sigma,
-         AIC = round(extractAIC(m, k = 2)[2], 1),
-         BIC = round(extractAIC(m, k = log(nobs(m)))[2], 1))
+  tibble(Model = label, n = nobs(m), p = length(coef(m)) - 1,
+         R2 = s$r.squared, Adj_R2 = s$adj.r.squared, Residual_SE = s$sigma)
 }
-model_summary_tab <- bind_rows(
-  mod_stats(model_work, "Full, linear"), mod_stats(model_red, "Reduced, linear"),
-  mod_stats(model_qc1, "Reduced + Age^2"), mod_stats(model_final, "Final: + Age^2 x Gender"))
-kable(model_summary_tab, digits = 5,
-      caption = "Model summaries (response 1/SBP, so R^2 is comparable across rows).")
-write.csv(model_summary_tab, "results/table3_model_comparison.csv", row.names = FALSE)
-overall_F(model_final, "final")
+kable(bind_rows(mod_stats(model_work, "Full, linear"), mod_stats(model_red, "Reduced, linear"),
+                mod_stats(model_qc1, "Reduced + Age^2"), mod_stats(model_qfull, "Reduced + Age^2 + Age^2 x Gender")),
+      digits = 5, caption = "Model summaries (response 1/SBP, so R^2 is comparable across rows).")
+```
+
+Decision step. The chosen model follows the partial F-tests above (alpha = 0.05, our judgment): keep Age^2 if its test is
+significant, and keep Age^2 x Gender only if Age^2 is kept and its own test is significant. Everything below uses
+`model_chosen`.
+
+```{r choose-model}
+alpha <- 0.05
+p_age2  <- a_age2$`Pr(>F)`[2]; p_age2g <- a_age2g$`Pr(>F)`[2]
+if (p_age2 < alpha && p_age2g < alpha) {
+  model_chosen <- model_qfull; chosen_label <- "Reduced + Age^2 + Age^2 x Gender"
+} else if (p_age2 < alpha) {
+  model_chosen <- model_qc1;   chosen_label <- "Reduced + Age^2"
+} else {
+  model_chosen <- model_red;   chosen_label <- "Reduced, linear"
+}
+cat("Chosen model:", chosen_label, "\n")
+overall_F(model_chosen, "chosen model")
+
+# interaction terms of the chosen model, and the same model without them (used for the headline joint test)
+term_labels <- attr(terms(model_chosen), "term.labels")
+int_labels  <- grep(":", term_labels, value = TRUE)
+int_coefs   <- grep(":", names(coef(model_chosen)), value = TRUE)
+model_chosen_noint <- update(model_chosen, reformulate(setdiff(term_labels, int_labels), response = "SBP_inv"))
+
+a_head <- anova(model_chosen_noint, model_chosen)
+cat(sprintf("Headline test, any Age x Gender term in the chosen model: F(%d, %d) = %.2f, p = %.2g\n",
+            a_head$Df[2], a_head$Res.Df[2], a_head$F[2], a_head$`Pr(>F)`[2]))
 ```
 
 ### 11.4 What the Age^2 terms change
@@ -1019,15 +1081,17 @@ pred_curve <- function(m, label) {
   bind_rows(lapply(c("female", "male"), function(g)
     tibble(Model = label, Gender = g, Age = ages_grid, fit = predict(m, mk_nd(ages_grid, g)))))
 }
-curves <- bind_rows(pred_curve(model_red, "Linear (reduced)"), pred_curve(model_final, "Final (with Age^2 terms)"))
+curves <- bind_rows(pred_curve(model_red, "Linear (reduced)"), pred_curve(model_chosen, "Chosen model"))
 
-p_curves <- ggplot(curves, aes(Age, fit, colour = Gender, linetype = Model)) +
+ggplot(curves, aes(Age, fit, colour = Gender, linetype = Model)) +
   geom_line(linewidth = 1) +
-  labs(title = "Fitted 1/SBP by age and gender: linear vs final model",
+  labs(title = "Fitted 1/SBP by age and gender: linear vs chosen model",
        subtitle = "Other predictors held at their means", x = "Age (years)", y = "Fitted 1/SBP") +
   theme_bw()
-print(p_curves)
 ```
+
+On the 1/SBP scale a negative male minus female difference means men have the higher SBP. We do not back-transform
+to mm Hg. The bands are pointwise 95% CIs from the model's covariance matrix.
 
 ```{r age2-gap, fig.width = 7.5, fig.height = 4.5}
 gap_curve <- function(m, ages, label) {
@@ -1038,109 +1102,150 @@ gap_curve <- function(m, ages, label) {
   tq  <- qt(0.975, df.residual(m))
   tibble(Model = label, Age = ages, est = est, lo = est - tq * se, hi = est + tq * se)
 }
-cross_ages <- function(gc) {
-  gc %>% group_by(Model) %>%
-    summarise(`Age(s) where the difference crosses 0` =
-                paste(Age[which(diff(sign(est)) != 0)], collapse = ", "), .groups = "drop")
-}
-gc <- bind_rows(gap_curve(model_red, ages_grid, "Linear (reduced)"),
-                gap_curve(model_final, ages_grid, "Final (with Age^2 terms)"))
 
-p_gap <- ggplot(gc, aes(Age, est, colour = Model, fill = Model)) +
+# Where the estimated difference changes sign, and where the 95% CI excludes 0
+gap_summary <- function(gd) {
+  gd %>% group_by(Model) %>%
+    summarise(`Estimate crosses 0 at age` = paste(Age[which(diff(sign(est)) != 0)], collapse = ", "),
+              `Men clearly higher up to age` = ifelse(any(hi < 0), max(Age[hi < 0]), NA),
+              `Women clearly higher from age` = ifelse(any(lo > 0), min(Age[lo > 0]), NA),
+              .groups = "drop")
+}
+
+gap_df <- bind_rows(gap_curve(model_red, ages_grid, "Linear (reduced)"),
+                    gap_curve(model_chosen, ages_grid, "Chosen model"))
+
+ggplot(gap_df, aes(Age, est, colour = Model, fill = Model)) +
   geom_hline(yintercept = 0, linetype = 2) +
   geom_ribbon(aes(ymin = lo, ymax = hi), alpha = 0.15, colour = NA) +
   geom_line(linewidth = 1) +
   labs(title = "Male minus female difference in 1/SBP, with 95% CI",
        subtitle = "Below 0 = men have higher SBP", x = "Age (years)", y = "Male - female (1/SBP)") +
   theme_bw()
-print(p_gap)
 
-gap_tab <- gc %>%
-  filter(Model == "Final (with Age^2 terms)", Age %in% c(30, 40, 50, 60, 70, 80)) %>%
-  select(Age, `Male - female (1/SBP)` = est, CI_low = lo, CI_high = hi)
-kable(gap_tab, digits = 6, caption = "Final model: male - female difference (1/SBP) at selected ages.")
-write.csv(gap_tab, "results/table4_gender_gap.csv", row.names = FALSE)
-kable(cross_ages(gc), caption = "Age at which the estimated difference changes sign (nearest 0.5 year).")
+gap_df %>% filter(Model == "Chosen model", Age %in% c(30, 40, 50, 60, 70, 80)) %>%
+  select(Age, `Male - female (1/SBP)` = est, CI_low = lo, CI_high = hi) %>%
+  kable(digits = 6, caption = "Chosen model: male - female difference (1/SBP) at selected ages.")
+kable(gap_summary(gap_df),
+      caption = "Where the difference changes sign and where its 95% CI excludes 0 (nearest 0.5 year; NA = never).")
 ```
 
 ### 11.5 Confirm the final model: problematic observations
 
+Cutoffs are the class cutoffs (Module 8), applied to the chosen model.
+
 ```{r influence-final}
-n_f <- nobs(model_final); p_f <- length(coef(model_final)) - 1
-h_f  <- hatvalues(model_final); r_f <- rstandard(model_final)
-cd_f <- cooks.distance(model_final); dff_f <- dffits(model_final); dfb_f <- dfbetas(model_final)
+n_f <- nobs(model_chosen); p_f <- length(coef(model_chosen)) - 1
+h_f  <- hatvalues(model_chosen); r_f <- rstandard(model_chosen)
+cd_f <- cooks.distance(model_chosen); dff_f <- dffits(model_chosen); dfb_f <- dfbetas(model_chosen)
 
 h_cut   <- 2 * (p_f + 1) / n_f
-r_cut   <- 4
-cd_cut  <- qf(0.5, p_f + 1, n_f - p_f - 1)
+r_cut   <- 4                                      # n >= 50: standardized residual outside [-4, 4]
+cd_cut  <- qf(0.5, p_f + 1, n_f - p_f - 1)        # median of F(p+1, n-p-1)
 dff_cut <- 2 * sqrt((p_f + 1) / n_f)
 dfb_cut <- 2 / sqrt(n_f)
 
-kable(tibble(
-  Measure = c("Leverage h_ii", "|Standardized residual|", "Cook's D", "|DFFITS|",
-              "|DFBETAS| (Age x Gender)", "|DFBETAS| (Age^2 x Gender)",
-              "|DFBETAS| (any coefficient)"),
-  Cutoff  = c("2(p+1)/n", "4 (n >= 50)", "F_0.5(p+1, n-p-1)", "2*sqrt((p+1)/n)",
-              "2/sqrt(n)", "2/sqrt(n)", "2/sqrt(n)"),
-  Value   = round(c(h_cut, r_cut, cd_cut, dff_cut, dfb_cut, dfb_cut, dfb_cut), 5),
-  Count   = c(sum(h_f > h_cut), sum(abs(r_f) > r_cut), sum(cd_f > cd_cut), sum(abs(dff_f) > dff_cut),
-              sum(abs(dfb_f[, int1]) > dfb_cut), sum(abs(dfb_f[, int2]) > dfb_cut),
-              sum(apply(abs(dfb_f) > dfb_cut, 1, any)))
-), caption = "Problematic points in the final model.")
+base_rows <- tibble(
+  Measure = c("Leverage h_ii", "|Standardized residual|", "Cook's D", "|DFFITS|"),
+  Cutoff  = c("2(p+1)/n", "4 (n >= 50)", "F_0.5(p+1, n-p-1)", "2*sqrt((p+1)/n)"),
+  Value   = round(c(h_cut, r_cut, cd_cut, dff_cut), 5),
+  Count   = c(sum(h_f > h_cut), sum(abs(r_f) > r_cut), sum(cd_f > cd_cut), sum(abs(dff_f) > dff_cut)))
+dfb_rows <- tibble(
+  Measure = paste0("|DFBETAS| (", int_coefs, ")"), Cutoff = "2/sqrt(n)", Value = round(dfb_cut, 5),
+  Count   = sapply(int_coefs, function(k) sum(abs(dfb_f[, k]) > dfb_cut)))
+any_row <- tibble(Measure = "|DFBETAS| (any coefficient)", Cutoff = "2/sqrt(n)", Value = round(dfb_cut, 5),
+                  Count = sum(apply(abs(dfb_f) > dfb_cut, 1, any)))
+kable(bind_rows(base_rows, dfb_rows, any_row), caption = "Problematic points in the chosen model.")
 cat("Maximum Cook's D:", round(max(cd_f), 4), "\n")
+```
 
+Good vs bad leverage (Module 8): a high-leverage point with a large residual is "bad" (it pulls the fit), and one with a
+small residual is "good". The extreme observations are shown on the original scale to check they are clinically possible.
+
+```{r leverage-good-bad}
+tibble(h = h_f, r = r_f) %>%
+  filter(h > h_cut) %>%
+  mutate(Type = ifelse(abs(r) > r_cut, "Bad leverage (|r| > 4)", "Good leverage (|r| <= 4)")) %>%
+  count(Type, name = "Count") %>%
+  kable(caption = "High-leverage points (h_ii > 2(p+1)/n), classified by standardized residual.")
+
+nhanes_t %>%
+  mutate(row = row_number(), leverage = h_f, std_resid = r_f, cooks_D = cd_f) %>%
+  filter(rank(-leverage) <= 10 | abs(std_resid) > r_cut) %>%
+  arrange(desc(leverage)) %>%
+  select(row, leverage, std_resid, cooks_D, BPSysAve, Age, Gender, BMI, TotChol, Poverty, AlcoholYear) %>%
+  kable(digits = 3, caption = "Ten highest-leverage observations and all |standardized residual| > 4, original scale.")
+```
+
+Sensitivity checks. We never remove a point just for being unusual; these refits only show whether the conclusions
+depend on the flagged points. Check 2 uses the Cook's D / bad-leverage rule. Because that rule may remove nothing,
+check 3 also removes points flagged by DFFITS or by DFBETAS for an interaction term.
+
+```{r sensitivity}
 drop_f <- which(cd_f > cd_cut | (h_f > h_cut & abs(r_f) > r_cut))
-cat("Observations removed for the check:", length(drop_f), sprintf("(%.1f%% of n)\n", 100 * length(drop_f) / n_f))
-trim_data <- if (length(drop_f) > 0) nhanes_t[-drop_f, ] else nhanes_t
-model_final_trim <- update(model_final, data = trim_data)
-model_qn_trim    <- update(model_qn,    data = trim_data)
+drop_g <- which(abs(dff_f) > dff_cut | rowSums(abs(dfb_f[, int_coefs, drop = FALSE]) > dfb_cut) > 0)
 
-if (length(drop_f) > 0) {
-  kable(bind_rows(get_int(model_final, "Final", int1), get_int(model_final_trim, "Final, without flagged", int1),
-                  get_int(model_final, "Final", int2), get_int(model_final_trim, "Final, without flagged", int2)),
-        digits = 6, caption = "Interaction terms with and without the flagged points.")
-
-  a3 <- anova(model_qn_trim, model_final_trim)
-  cat(sprintf("Joint test of both interaction terms without flagged points: F(%d, %d) = %.2f, p = %.2g\n",
-              a3$Df[2], a3$Res.Df[2], a3$F[2], a3$`Pr(>F)`[2]))
-
-  gc_trim <- bind_rows(gap_curve(model_final, ages_grid, "Final"),
-                       gap_curve(model_final_trim, ages_grid, "Final, without flagged"))
-  kable(cross_ages(gc_trim), caption = "Age where the difference crosses 0, with and without flagged points.")
-} else {
-  cat("No observations simultaneously satisfy the combined criterion (Cook's D > cutoff, or leverage > cutoff combined with |r| > 4). Cook's D flags 0 points (maximum =", round(max(cd_f), 4), "). Sensitivity results are identical to the main results.\n")
+refit_check <- function(drop_idx, label) {
+  d  <- if (length(drop_idx) > 0) nhanes_t[-drop_idx, ] else nhanes_t   # guard: x[-integer(0), ] would drop everything
+  m  <- update(model_chosen, data = d)
+  m0 <- update(model_chosen_noint, data = d)
+  aj <- anova(m0, m)
+  list(int   = bind_rows(lapply(int_coefs, function(k) get_int(m, label, k))),
+       joint = tibble(Check = label, Removed = length(drop_idx), F = aj$F[2], df1 = aj$Df[2],
+                      df2 = aj$Res.Df[2], p = aj$`Pr(>F)`[2]),
+       gap   = gap_curve(m, ages_grid, label))
 }
+chk <- list(refit_check(integer(0), "1. Chosen model, nothing removed"),
+            refit_check(drop_f,     "2. Without Cook's D / bad-leverage points"),
+            refit_check(drop_g,     "3. Without DFFITS / DFBETAS-flagged points"))
+
+cat("Removed in check 2:", length(drop_f), sprintf("(%.1f%% of n)\n", 100 * length(drop_f) / n_f))
+cat("Removed in check 3:", length(drop_g), sprintf("(%.1f%% of n)\n", 100 * length(drop_g) / n_f))
+
+kable(bind_rows(lapply(chk, `[[`, "int")), digits = 6,
+      caption = "Interaction terms of the chosen model with and without the flagged points.")
+kable(bind_rows(lapply(chk, `[[`, "joint")), digits = 4,
+      caption = "Joint test of all Age x Gender terms with and without the flagged points.")
+kable(gap_summary(bind_rows(lapply(chk, `[[`, "gap"))),
+      caption = "Sign change and CI-based ages with and without the flagged points.")
 ```
 
 ### 11.6 Final residual plots
 
+Conditions 1 and 2 hold (plots in the Appendix below). Residual plots for the chosen model: linearity and constant
+variance from residuals vs fitted and vs each predictor; normality from the Q-Q plot of the standardized residuals.
+Independence cannot be checked from row order (the NHANES package rows were resampled), and clustering within the
+sampling design is a limitation.
+
 ```{r final-resid-main, fig.width = 9, fig.height = 4}
 par(mfrow = c(1, 2))
-plot(fitted(model_final), resid(model_final), pch = ".", col = rgb(0, 0, 0, 0.3),
+plot(fitted(model_chosen), resid(model_chosen), pch = ".", col = rgb(0, 0, 0, 0.3),
      main = "Final: Residuals vs Fitted", xlab = "Fitted 1/SBP", ylab = "Residuals")
 abline(h = 0, col = "red", lty = 2)
-qqnorm(rstandard(model_final), pch = ".", col = rgb(0, 0, 0, 0.3),
+qqnorm(rstandard(model_chosen), pch = ".", col = rgb(0, 0, 0, 0.3),
        main = "Final: Normal Q-Q", xlab = "Theoretical quantiles", ylab = "Standardized residuals")
-qqline(rstandard(model_final), col = "red", lty = 2)
+qqline(rstandard(model_chosen), col = "red", lty = 2)
 par(mfrow = c(1, 1))
 ```
 
 ```{r final-resid-pred, fig.width = 11, fig.height = 6}
 par(mfrow = c(2, 3))
 for (v in c("Age_bc", "BMI", "TotChol_bc", "Poverty", "AlcoholYear")) {
-  plot(nhanes_t[[v]], resid(model_final), pch = ".", col = rgb(0, 0, 0, 0.3),
+  plot(nhanes_t[[v]], resid(model_chosen), pch = ".", col = rgb(0, 0, 0, 0.3),
        main = paste0("Residuals vs ", v), xlab = v, ylab = "Residuals")
   abline(h = 0, col = "red", lty = 2)
 }
-boxplot(resid(model_final) ~ nhanes_t$Gender, main = "Residuals vs Gender",
+boxplot(resid(model_chosen) ~ nhanes_t$Gender, main = "Residuals vs Gender",
         xlab = "Gender", ylab = "Residuals", col = "grey85")
 abline(h = 0, col = "red", lty = 2)
 par(mfrow = c(1, 1))
 ```
 
+Before and after: preliminary model, response transformed only, and the chosen model.
+
 ```{r final-compare, fig.width = 10, fig.height = 6.5}
 mods <- list(list(model_prelim, "Preliminary"), list(model_bc, "Transformed Y only"),
-             list(model_final, "Final"))
+             list(model_chosen, "Final"))
 par(mfrow = c(2, 3))
 for (pair in mods) {
   plot(fitted(pair[[1]]), resid(pair[[1]]), pch = ".", col = rgb(0, 0, 0, 0.3),
@@ -1154,15 +1259,41 @@ for (pair in mods) {
 par(mfrow = c(1, 1))
 ```
 
-### Appendix: Conditions 1 and 2 (final model)
+Is the response transformation still supported now that the predictors are in their final form? The Box-Cox
+profile is rerun on the original SBP with the chosen model's predictors. We check that the 95% CI still contains -1.
+
+```{r boxcox-recheck, fig.width = 6, fig.height = 4.5}
+bc_formula <- reformulate(attr(terms(model_chosen), "term.labels"), response = "BPSysAve")
+bc_check   <- lm(bc_formula, data = nhanes_t)
+summary(car::powerTransform(bc_check))
+MASS::boxcox(bc_check, lambda = seq(-2, 1, by = 0.05))
+abline(v = -1, col = "red", lty = 2)
+```
+
+### 11.7 Answer to the research question
+
+```{r answer}
+cat(sprintf("Chosen model: %s (adjusted R^2 = %.4f, n = %d)\n", chosen_label,
+            summary(model_chosen)$adj.r.squared, nobs(model_chosen)))
+cat(sprintf("Does the age-SBP association differ by gender? Joint test of all Age x Gender terms: F(%d, %d) = %.2f, p = %.2g\n",
+            a_head$Df[2], a_head$Res.Df[2], a_head$F[2], a_head$`Pr(>F)`[2]))
+cat("The size and direction of the difference are shown by the male - female gap (12.4):\n")
+gap_df %>% filter(Model == "Chosen model", Age %in% c(30, 40, 50, 60, 70, 80)) %>%
+  select(Age, `Male - female (1/SBP)` = est, CI_low = lo, CI_high = hi) %>%
+  kable(digits = 6, caption = "Answer: male - female difference in 1/SBP by age (negative = men higher SBP).")
+```
+
+### Appendix: Conditions 1 and 2 (chosen model)
 
 ```{r appendix-conditions, fig.width = 6, fig.height = 5}
-plot(fitted(model_final), nhanes_t$SBP_inv, pch = ".", col = rgb(0, 0, 0, 0.3),
+# Condition 1: 1/SBP vs fitted values
+plot(fitted(model_chosen), nhanes_t$SBP_inv, pch = ".", col = rgb(0, 0, 0, 0.3),
      main = "Condition 1: 1/SBP vs fitted (final)", xlab = "Fitted 1/SBP", ylab = "Observed 1/SBP")
 abline(0, 1, col = "red", lty = 2)
 ```
 
 ```{r appendix-pairs, fig.width = 7, fig.height = 7}
+# Condition 2: pairs plot of the numeric predictors in the chosen model
 pairs(nhanes_t[, c("Age_bc", "BMI", "TotChol_bc", "Poverty", "AlcoholYear")],
       pch = ".", col = rgb(0, 0, 0, 0.3), gap = 0.3,
       main = "Pairwise plots of numeric predictors (final model)")
