@@ -30,22 +30,8 @@ library(car)
 
 ## 1. Data Preparation
 
-We use two versions of the data:
-\begin{itemize}
-  \item \textbf{\texttt{dat}} --- all participants with a measured SBP, used for exploratory plots.
-  \item \textbf{\texttt{nhanes\_adult}} --- restricted to age $\geq$ 20 (required for \texttt{Smoke100} and \texttt{AlcoholYear}), complete cases across all model variables, and \textbf{one row per participant}, used for modelling.
-\end{itemize}
-
-The `NHANES` package was built by resampling `NHANESraw` with replacement, so the
-same participant (`ID`) can appear in several identical rows. Following the
-instructor's guidance, we aggregate to one row per individual. Repeated rows are
-identical on every model variable, so this is the same as keeping the first row.
-
 
 ``` r
-dat <- NHANES %>%
-  filter(!is.na(BPSysAve))
-
 model_vars <- c("BPSysAve", "Age", "BMI", "DirectChol", "TotChol", "Poverty",
                 "SleepHrsNight", "AlcoholYear", "Gender", "Smoke100", "PhysActive")
 
@@ -60,14 +46,6 @@ nhanes_adult <- adult_cc %>%
   distinct(ID, .keep_all = TRUE) %>%
   select(-ID)
 
-cat("Exploratory sample (dat):                  n =", nrow(dat), "\n")
-```
-
-```
-## Exploratory sample (dat):                  n = 8551
-```
-
-``` r
 cat("Adults 20+, complete cases (with repeats): n =", nrow(adult_cc), "\n")
 ```
 
@@ -83,52 +61,9 @@ cat("Model sample, unique participants:         n =", nrow(nhanes_adult), "\n")
 ## Model sample, unique participants:         n = 3203
 ```
 
-## 2. Response Variable: Systolic Blood Pressure
+## 2. Predictor Variables
 
-
-``` r
-sbp <- dat$BPSysAve
-summary(sbp)
-```
-
-```
-##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-##    76.0   106.0   116.0   118.2   127.0   226.0
-```
-
-``` r
-cat("SD:", round(sd(sbp), 2), "\n")
-```
-
-```
-## SD: 17.25
-```
-
-
-``` r
-par(mfrow = c(1, 2))
-hist(sbp, breaks = 40, freq = FALSE, col = "grey80", border = "white",
-     main = "Distribution of SBP", xlab = "Systolic BP (mm Hg)")
-lines(density(sbp), lwd = 1.5)
-curve(dnorm(x, mean(sbp), sd(sbp)), col = "red", lty = 2, lwd = 1.5, add = TRUE)
-legend("topright", legend = c("Empirical", "Normal"), lty = c(1, 2),
-       col = c("black", "red"), bty = "n", cex = 0.8)
-
-qqnorm(sbp, main = "Q–Q Plot of SBP"); qqline(sbp, col = "red")
-```
-
-<div class="figure" style="text-align: center">
-<img src="results/s02_sbp_distribution.png" alt="plot of chunk sbp-plots"  />
-<p class="caption">plot of chunk sbp-plots</p>
-</div>
-
-``` r
-par(mfrow = c(1, 1))
-```
-
-## 3. Predictor Variables
-
-### 3.1 Numeric Predictors
+### 2.1 Numeric Predictors
 
 
 ``` r
@@ -185,7 +120,7 @@ print(p_hist_pred)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/s03-1_num_pred_histograms.png" alt="plot of chunk hist-predictors"  />
+<img src="results/hist-predictors-1.png" alt="plot of chunk hist-predictors"  />
 <p class="caption">plot of chunk hist-predictors</p>
 </div>
 
@@ -203,11 +138,11 @@ nhanes_adult %>%
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/s03-1_num_pred_boxplots.png" alt="plot of chunk box-predictors"  />
+<img src="results/box-predictors-1.png" alt="plot of chunk box-predictors"  />
 <p class="caption">plot of chunk box-predictors</p>
 </div>
 
-### 3.2 Categorical Predictors
+### 2.2 Categorical Predictors
 
 
 ``` r
@@ -252,11 +187,11 @@ nhanes_adult %>%
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/s03-2_cat_pred_barplots.png" alt="plot of chunk bar-predictors"  />
+<img src="results/bar-predictors-1.png" alt="plot of chunk bar-predictors"  />
 <p class="caption">plot of chunk bar-predictors</p>
 </div>
 
-## 4. Research Question: SBP vs Age by Gender
+## 3. Research Question: SBP vs Age by Gender
 
 
 ``` r
@@ -271,7 +206,7 @@ print(p_sbp_age)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/s04_sbp_vs_age_gender_linear.png" alt="plot of chunk sbp-age-lm"  />
+<img src="results/sbp-age-lm-1.png" alt="plot of chunk sbp-age-lm"  />
 <p class="caption">plot of chunk sbp-age-lm</p>
 </div>
 
@@ -286,7 +221,7 @@ ggplot(nhanes_adult,
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/s04_sbp_vs_age_gender_loess.png" alt="plot of chunk sbp-age-loess"  />
+<img src="results/sbp-age-loess-1.png" alt="plot of chunk sbp-age-loess"  />
 <p class="caption">plot of chunk sbp-age-loess</p>
 </div>
 
@@ -310,39 +245,17 @@ Table: Simple age slope within each gender group.
 |female |         0.530| 1511|
 |male   |         0.289| 1692|
 
-## 5. Data Cleaning and Analysis
+## 4. Data Cleaning and Analysis
 
-Cleaning follows three rules:
-\begin{itemize}
-  \item keep participants aged 20 years and older
-  \item exclude rows with a missing value in any model variable, since the model can only be fit on complete cases
-  \item remove duplicated IDs so that each participant appears once (reduces but does not eliminate dependence from NHANES's complex survey design)
-\end{itemize}
+### 4.1 Cleaning steps
 
 
 ``` r
-vars_cont <- c("Age", "AlcoholYear", "BMI", "DirectChol",
-               "Poverty", "SleepHrsNight", "TotChol")
-vars_cat  <- c("Gender", "PhysActive", "Smoke100")
-
-dat_raw <- NHANES %>%
-  select(ID, SBP = BPSysAve, all_of(vars_cont), all_of(vars_cat))
-```
-
-### 5.1 Cleaning steps
-
-
-``` r
-n0 <- nrow(dat_raw)
-
-dat_adult <- dat_raw %>% filter(Age >= 20)
-n1 <- nrow(dat_adult)
-
-dat_cc <- dat_adult %>% drop_na()
-n2 <- nrow(dat_cc)
-
-dat <- dat_cc %>% distinct(ID, .keep_all = TRUE)
-n3 <- nrow(dat)
+n0 <- nrow(NHANES)
+n1 <- NHANES %>% filter(Age >= 20) %>% nrow()
+n2 <- NHANES %>% filter(Age >= 20) %>%
+  select(ID, all_of(model_vars)) %>% na.omit() %>% nrow()
+n3 <- nrow(nhanes_adult)
 
 cleaning_log <- tibble(
   Step = c("Raw data",
@@ -371,20 +284,20 @@ Table: Number of rows remaining after each cleaning step.
 write.csv(cleaning_log, "results/cleaning_log.csv", row.names = FALSE)
 ```
 
-### 5.2 Cleaned response variable
+### 4.2 Cleaned response variable
 
 
 ``` r
 par(mfrow = c(1, 2))
-hist(dat$SBP, breaks = 40, freq = FALSE, col = "steelblue", border = "white",
+hist(nhanes_adult$BPSysAve, breaks = 40, freq = FALSE, col = "steelblue", border = "white",
      main = "Distribution of SBP", xlab = "Systolic BP (mm Hg)")
-lines(density(dat$SBP), lwd = 1.5)
-qqnorm(dat$SBP, main = "Normal Q-Q Plot of SBP")
-qqline(dat$SBP, col = "red")
+lines(density(nhanes_adult$BPSysAve), lwd = 1.5)
+qqnorm(nhanes_adult$BPSysAve, main = "Normal Q-Q Plot of SBP")
+qqline(nhanes_adult$BPSysAve, col = "red")
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/s05-2_cleaned_sbp.png" alt="plot of chunk fig-response"  />
+<img src="results/fig-response-1.png" alt="plot of chunk fig-response"  />
 <p class="caption">plot of chunk fig-response</p>
 </div>
 
@@ -392,16 +305,16 @@ qqline(dat$SBP, col = "red")
 par(mfrow = c(1, 1))
 ```
 
-### 5.3 Cleaned predictor variables
+### 4.3 Cleaned predictor variables
 
 
 ``` r
-cont_long <- dat %>%
-  select(all_of(vars_cont)) %>%
+cont_long <- nhanes_adult %>%
+  select(all_of(num_vars)) %>%
   pivot_longer(everything(), names_to = "variable", values_to = "value")
 
-cat_long <- dat %>%
-  select(all_of(vars_cat)) %>%
+cat_long <- nhanes_adult %>%
+  select(all_of(cat_vars)) %>%
   mutate(across(everything(), as.character)) %>%
   pivot_longer(everything(), names_to = "variable", values_to = "level")
 
@@ -418,13 +331,13 @@ p2b <- ggplot(cat_long, aes(level)) +
   scale_y_continuous(expand = expansion(mult = c(0, 0.12))) +
   labs(title = "Categorical Predictors", x = NULL, y = "Count")
 
-ggsave("results/s05-3_cleaned_pred_combined.png",
+ggsave("results/s04-3_cleaned_pred_combined.png",
        plot_grid(p2a, p2b, ncol = 1, rel_heights = c(2, 1)),
        width = 11, height = 9, bg = "white")
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/s05-3_cleaned_pred_combined.png" alt="plot of chunk fig-predictors-show"  />
+<img src="results/s04-3_cleaned_pred_combined.png" alt="plot of chunk fig-predictors-show"  />
 <p class="caption">plot of chunk fig-predictors-show</p>
 </div>
 
@@ -437,14 +350,14 @@ ggplot(cont_long, aes(x = "", y = value)) +
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/s05-3_cleaned_pred_boxplots.png" alt="plot of chunk fig-boxplots"  />
+<img src="results/fig-boxplots-1.png" alt="plot of chunk fig-boxplots"  />
 <p class="caption">plot of chunk fig-boxplots</p>
 </div>
 
 
 ``` r
-dat %>%
-  select(SBP, all_of(vars_cont)) %>%
+nhanes_adult %>%
+  select(BPSysAve, all_of(num_vars)) %>%
   pivot_longer(everything(), names_to = "Variable", values_to = "value") %>%
   group_by(Variable) %>%
   summarise(
@@ -467,17 +380,17 @@ Table: Summary statistics for SBP and the continuous predictors (cleaned data).
 |Age           |  47.05|  17.04| 20.00|  46.00|  80.00|
 |AlcoholYear   |  72.08| 101.52|  0.00|  24.00| 364.00|
 |BMI           |  28.93|   6.66| 15.02|  27.87|  69.00|
+|BPSysAve      | 121.00|  16.97| 78.00| 119.00| 226.00|
 |DirectChol    |   1.36|   0.42|  0.39|   1.29|   4.03|
 |Poverty       |   2.88|   1.66|  0.00|   2.77|   5.00|
-|SBP           | 121.00|  16.97| 78.00| 119.00| 226.00|
 |SleepHrsNight |   6.87|   1.34|  2.00|   7.00|  12.00|
 |TotChol       |   5.07|   1.07|  1.53|   4.99|  13.65|
 
-### 5.4 Cleaned age by gender interaction
+### 4.4 Cleaned age by gender interaction
 
 
 ``` r
-ggplot(dat, aes(x = Age, y = SBP, colour = Gender)) +
+ggplot(nhanes_adult, aes(x = Age, y = BPSysAve, colour = Gender)) +
   geom_point(alpha = 0.15, size = 0.8) +
   geom_smooth(method = "lm", se = TRUE, linewidth = 1.1) +
   labs(title = "SBP vs Age by Gender",
@@ -486,18 +399,18 @@ ggplot(dat, aes(x = Age, y = SBP, colour = Gender)) +
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/s05-4_cleaned_age_gender.png" alt="plot of chunk fig-age-gender"  />
+<img src="results/fig-age-gender-1.png" alt="plot of chunk fig-age-gender"  />
 <p class="caption">plot of chunk fig-age-gender</p>
 </div>
 
-### 5.5 Save the cleaned data
+### 4.5 Save the cleaned data
 
 
 ``` r
-write.csv(dat, "NHANES_cleaned.csv", row.names = FALSE)
+write.csv(nhanes_adult, "NHANES_cleaned.csv", row.names = FALSE)
 ```
 
-## 6. Preliminary Model
+## 5. Preliminary Model
 
 
 ``` r
@@ -542,7 +455,7 @@ Table: Quantities derived from the preliminary model, used in the written discus
 |Age at which fitted gap reaches 0     |70.3  |
 |Participants in model sample          |3,203 |
 
-## 7. Model Results
+## 6. Model Results
 
 
 ``` r
@@ -606,14 +519,9 @@ write.csv(coef_tab, "results/table1_coefficients.csv", row.names = FALSE)
 
 
 
-## 8. Assumption Assessment
+## 7. Assumption Assessment
 
-**We do not correct any violations at this stage.**
-
-We first check the two conditions that tell us whether residual plots can be trusted,
-then the four assumptions.
-
-### 8.1 Conditions
+### 7.1 Conditions
 
 
 ``` r
@@ -624,7 +532,7 @@ abline(0, 1, col = "red", lty = 2)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/s08-1_conditions.png" alt="plot of chunk conditions"  />
+<img src="results/conditions-1.png" alt="plot of chunk conditions"  />
 <p class="caption">plot of chunk conditions</p>
 </div>
 
@@ -635,11 +543,11 @@ pairs(nhanes_adult[, num_vars], pch = ".", col = rgb(0, 0, 0, 0.3),
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/s08-1_pairs_plot.png" alt="plot of chunk pairs-plot"  />
+<img src="results/pairs-plot-1.png" alt="plot of chunk pairs-plot"  />
 <p class="caption">plot of chunk pairs-plot</p>
 </div>
 
-### 8.2 Residual plots
+### 7.2 Residual plots
 
 
 ``` r
@@ -655,7 +563,7 @@ qqline(rstandard(model_prelim), col = "red", lty = 2)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/s08-2_resid_fitted_qq.png" alt="plot of chunk resid-fitted-qq"  />
+<img src="results/resid-fitted-qq-1.png" alt="plot of chunk resid-fitted-qq"  />
 <p class="caption">plot of chunk resid-fitted-qq</p>
 </div>
 
@@ -676,7 +584,7 @@ par(mfrow = c(1, 1))
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/s08-2_resid_num_predictors.png" alt="plot of chunk resid-predictors-num"  />
+<img src="results/resid-predictors-num-1.png" alt="plot of chunk resid-predictors-num"  />
 <p class="caption">plot of chunk resid-predictors-num</p>
 </div>
 
@@ -692,7 +600,7 @@ for (v in cat_vars) {
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/s08-2_resid_cat_predictors.png" alt="plot of chunk resid-predictors-cat"  />
+<img src="results/resid-predictors-cat-1.png" alt="plot of chunk resid-predictors-cat"  />
 <p class="caption">plot of chunk resid-predictors-cat</p>
 </div>
 
@@ -723,9 +631,7 @@ Table: Residual spread by fitted-value quintile.
 |               4|124–128      |       15.90|
 |               5|128–141      |       19.70|
 
-## 9. Addressing Non-linearity in Age
-
-The residuals vs Age plot in Section 8 shows a U-shaped pattern, suggesting the relationship between SBP and Age is not purely linear. We add a quadratic term `I(Age^2)` and its interaction with Gender to allow the curvature to differ by sex.
+## 8. Addressing Non-linearity in Age
 
 
 ``` r
@@ -762,8 +668,6 @@ Table: Model comparison: linear vs quadratic Age term.
 |Linear Age    | 0.2253|  0.2226| 26435.8|    14.963|
 |Quadratic Age | 0.2341|  0.2309| 26403.4|    14.883|
 
-Adding the quadratic Age terms yields a modest improvement in fit: R² increases from 0.2253 to 0.2341 (a gain of 0.0088), and adjusted R² from 0.2226 to 0.2309. The AIC drops by 32.4 points, which is considered substantial (> 10), and residual SE decreases from 14.963 to 14.883 mm Hg. While the absolute gain in explained variance is small, the consistent improvement across all metrics suggests the quadratic term is capturing a real, if modest, non-linearity in the age–SBP relationship.
-
 
 ``` r
 par(mfrow = c(1, 2))
@@ -778,7 +682,7 @@ abline(h = 0, col = "red", lty = 2)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/s09_resid_quad_age.png" alt="plot of chunk resid-quad"  />
+<img src="results/resid-quad-1.png" alt="plot of chunk resid-quad"  />
 <p class="caption">plot of chunk resid-quad</p>
 </div>
 
@@ -786,11 +690,9 @@ abline(h = 0, col = "red", lty = 2)
 par(mfrow = c(1, 1))
 ```
 
-## 10. Box-Cox Transformation
+## 9. Box-Cox Transformation
 
-### 10.1 Response Transformation
-
-We apply Box-Cox to the preliminary model to determine whether a transformation of SBP would better satisfy the normality assumption.
+### 9.1 Response Transformation
 
 
 ``` r
@@ -823,11 +725,9 @@ MASS::boxcox(model_prelim, lambda = seq(-2, 2, by = 0.05))
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/s10-1_boxcox_profile.png" alt="plot of chunk boxcox-response"  />
+<img src="results/boxcox-response-1.png" alt="plot of chunk boxcox-response"  />
 <p class="caption">plot of chunk boxcox-response</p>
 </div>
-
-The output suggests $\lambda \approx -1$, and $\lambda = 1$ (no transformation) falls outside the 95% CI. We round to the nearest interpretable value: $\lambda = -1$, i.e. an **inverse transformation** $1/\text{SBP}$ (n = 3203).
 
 
 ``` r
@@ -859,7 +759,7 @@ qqline(rstandard(model_bc), col = "red", lty = 2)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/s10-1_transformed_resid_qq.png" alt="plot of chunk bc-resid-qq"  />
+<img src="results/bc-resid-qq-1.png" alt="plot of chunk bc-resid-qq"  />
 <p class="caption">plot of chunk bc-resid-qq</p>
 </div>
 
@@ -882,7 +782,7 @@ par(mfrow = c(1, 1))
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/s10-1_transformed_resid_num.png" alt="plot of chunk bc-resid-num"  />
+<img src="results/bc-resid-num-1.png" alt="plot of chunk bc-resid-num"  />
 <p class="caption">plot of chunk bc-resid-num</p>
 </div>
 
@@ -898,7 +798,7 @@ for (v in cat_vars) {
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/s10-1_transformed_resid_cat.png" alt="plot of chunk bc-resid-cat"  />
+<img src="results/bc-resid-cat-1.png" alt="plot of chunk bc-resid-cat"  />
 <p class="caption">plot of chunk bc-resid-cat</p>
 </div>
 
@@ -930,9 +830,7 @@ Table: Residual spread by fitted-value quintile (inverse SBP model).
 |        4|0.00849–0.00884 |    0.000881|
 |        5|0.00884–0.01005 |    0.000875|
 
-### 10.2 Predictor Transformations
-
-`MASS::boxcox()` only assesses the response. We use `car::powerTransform()` to check whether any numeric predictors also need transforming. `AlcoholYear` and `Poverty` contain zeros and are excluded.
+### 9.2 Predictor Transformations
 
 
 ``` r
@@ -943,8 +841,6 @@ pos_vars <- c("Age", "BMI", "DirectChol", "TotChol", "SleepHrsNight")
 # summary(powerTransform(nhanes_adult[, pos_vars]))
 ####################################
 ```
-
-The output suggests: Age $\approx 1/3$ (cube root), DirectChol $\approx 0$ (log), TotChol $\approx 0$ (log), SleepHrsNight $\approx 3/2$. BMI's CI does not include a clean value so it is left untransformed.
 
 
 ``` r
@@ -962,9 +858,7 @@ model_all_bc <- lm(
 )
 ```
 
-### 10.3 Model Comparison
-
-We compare three models side by side: untransformed, response-only transformed (1/SBP), and fully transformed (1/SBP + predictor transformations). Each row shows residuals against a different variable; each column is a model.
+### 9.3 Model Comparison
 
 
 ``` r
@@ -1022,7 +916,7 @@ abline(h = 0, col = "red", lty = 2)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/s10-3_model_comparison_resid.png" alt="plot of chunk boxcox-compare"  />
+<img src="results/boxcox-compare-1.png" alt="plot of chunk boxcox-compare"  />
 <p class="caption">plot of chunk boxcox-compare</p>
 </div>
 
@@ -1045,7 +939,7 @@ qqline(rstandard(model_all_bc), col = "red", lty = 2)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/s10-3_model_comparison_qq.png" alt="plot of chunk boxcox-qq"  />
+<img src="results/boxcox-qq-1.png" alt="plot of chunk boxcox-qq"  />
 <p class="caption">plot of chunk boxcox-qq</p>
 </div>
 
@@ -1053,9 +947,7 @@ qqline(rstandard(model_all_bc), col = "red", lty = 2)
 par(mfrow = c(1, 1))
 ```
 
-## 11. Leverage, Outliers, Influence and Collinearity
-
-Note: use the current working model: 1/SBP response, transformed predictors, Age x Gender interaction.
+## 10. Leverage, Outliers, Influence and Collinearity
 
 
 ``` r
@@ -1077,10 +969,7 @@ n <- nobs(model_work)
 p <- length(coef(model_work)) - 1
 ```
 
-### 11.1 Leverage
-
-High leverage = unusual combination of predictor values.
-Rule of thumb: h_ii > 2(p+1)/n is "high", h_ii > 3(p+1)/n is "very high"; h_ii close to 1 is extreme.
+### 10.1 Leverage
 
 
 ``` r
@@ -1125,7 +1014,7 @@ abline(h = c(h_cut, 1.5 * h_cut), col = c("orange", "red"), lty = 2)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/s11-1_leverage.png" alt="plot of chunk leverage"  />
+<img src="results/leverage-1.png" alt="plot of chunk leverage"  />
 <p class="caption">plot of chunk leverage</p>
 </div>
 
@@ -1167,9 +1056,7 @@ Table: 15 highest-leverage observations.
 write.csv(lev_tab, "results/leverage_top15.csv", row.names = FALSE)
 ```
 
-### 11.2 Outliers (standardized residuals)
-
-For n >= 50 the course cutoff is |r| > 4.
+### 10.2 Outliers (standardized residuals)
 
 
 ``` r
@@ -1203,7 +1090,7 @@ abline(h = c(-4, 4), v = h_cut, col = "red", lty = 2)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/s11-2_outliers.png" alt="plot of chunk outliers"  />
+<img src="results/outliers-1.png" alt="plot of chunk outliers"  />
 <p class="caption">plot of chunk outliers</p>
 </div>
 
@@ -1240,10 +1127,7 @@ Table: Observations with |standardized residual| > 4 (course cutoff for n >= 50)
 write.csv(out_tab, "results/outliers_std_resid.csv", row.names = FALSE)
 ```
 
-### 11.3 Influence
-
-A point matters most when it has BOTH high leverage and a large residual. Cook's distance and DFFITS combine
-the two; DFBETAS shows the effect on each coefficient (we care most about the Age x Gender term).
+### 10.3 Influence
 
 
 ``` r
@@ -1537,7 +1421,7 @@ abline(h = c(-dfb_cut, dfb_cut), col = "red", lty = 2)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/s11-3_influence_cooks_dfbetas.png" alt="plot of chunk influence"  />
+<img src="results/influence-1.png" alt="plot of chunk influence"  />
 <p class="caption">plot of chunk influence</p>
 </div>
 
@@ -1545,87 +1429,96 @@ abline(h = c(-dfb_cut, dfb_cut), col = "red", lty = 2)
 par(mfrow = c(1, 1))
 ```
 
-At n = 3,203 the DFBETAS cutoff 2/√n ≈ 0.035 is very liberal and flags approximately 23% of observations. Cook's D flags 0 observations (maximum = 0.013), so no single point shifts the fitted values substantially.
-
-### 11.4 Refit without unusual points
-
-We keep clinically plausible readings by default. Here we only check how much the conclusions depend on
-the flagged points: drop observations where Cook's D exceeds the median F-distribution cutoff, or where both high leverage and |r| > 4 occur together (n ≥ 50 cutoff), and compare.
+### 10.4 Refit without unusual points
 
 
 ``` r
 drop_idx <- which(cd > cd_cut | (h > h_cut & abs(r) > 4))
-cat("Observations removed for sensitivity check:", length(drop_idx),
+cat("Observations flagged by primary criterion:", length(drop_idx),
     sprintf("(%.1f%% of n)\n", 100 * length(drop_idx) / n))
 ```
 
 ```
-## Observations removed for sensitivity check: 0 (0.0% of n)
+## Observations flagged by primary criterion: 0 (0.0% of n)
 ```
 
 ``` r
-model_trim <- update(model_work, data = nhanes_t[-drop_idx, ])
+if (length(drop_idx) > 0) {
+  model_trim <- update(model_work, data = nhanes_t[-drop_idx, ])
+
+  comp <- bind_rows(
+    tidy(model_work, conf.int = TRUE) %>% mutate(Model = "Full"),
+    tidy(model_trim, conf.int = TRUE) %>% mutate(Model = "Without flagged")
+  ) %>%
+    select(Model, term, estimate, conf.low, conf.high, p.value) %>%
+    pivot_wider(names_from = Model,
+                values_from = c(estimate, conf.low, conf.high, p.value)) %>%
+    mutate(`% change in estimate` =
+             round(100 * (`estimate_Without flagged` - estimate_Full) / abs(estimate_Full), 1))
+
+  comp %>%
+    select(term, estimate_Full, `estimate_Without flagged`, `% change in estimate`,
+           p.value_Full, `p.value_Without flagged`) %>%
+    kable(digits = 5, caption = "Coefficients with and without influential points.")
+
+  comp %>%
+    filter((p.value_Full < 0.05) != (`p.value_Without flagged` < 0.05) |
+             sign(estimate_Full) != sign(`estimate_Without flagged`)) %>%
+    select(term, estimate_Full, `estimate_Without flagged`, p.value_Full, `p.value_Without flagged`)
+} else {
+  cat("No observations meet the primary criterion.\n")
+  cat("Alternative check: dropping", sum(abs(r) > 4), "outliers (|r| > 4) and",
+      sum(h > 1.5 * h_cut), "very-high-leverage points (> 3(p+1)/n).\n\n")
+
+  drop_alt <- which(abs(r) > 4 | h > 1.5 * h_cut)
+  model_trim <- update(model_work, data = nhanes_t[-drop_alt, ])
+
+  comp <- bind_rows(
+    tidy(model_work, conf.int = TRUE) %>% mutate(Model = "Full"),
+    tidy(model_trim, conf.int = TRUE) %>% mutate(Model = "Sensitivity")
+  ) %>%
+    select(Model, term, estimate, conf.low, conf.high, p.value) %>%
+    pivot_wider(names_from = Model,
+                values_from = c(estimate, conf.low, conf.high, p.value)) %>%
+    mutate(`% change` =
+             round(100 * (estimate_Sensitivity - estimate_Full) / abs(estimate_Full), 1))
+
+  comp %>%
+    select(term, estimate_Full, estimate_Sensitivity, `% change`,
+           p.value_Full, p.value_Sensitivity) %>%
+    kable(digits = 5, caption = "Coefficients: full model vs alternative sensitivity check (outliers + very-high-leverage removed).")
+
+  comp %>%
+    filter((p.value_Full < 0.05) != (p.value_Sensitivity < 0.05) |
+             sign(estimate_Full) != sign(estimate_Sensitivity)) %>%
+    select(term, estimate_Full, estimate_Sensitivity, p.value_Full, p.value_Sensitivity)
+}
 ```
 
 ```
-## Error in `contrasts<-`:
-## ! contrasts can be applied only to factors with 2 or more levels
-```
-
-``` r
-comp <- bind_rows(
-  tidy(model_work, conf.int = TRUE) %>% mutate(Model = "Full"),
-  tidy(model_trim, conf.int = TRUE) %>% mutate(Model = "Without flagged")
-) %>%
-  select(Model, term, estimate, conf.low, conf.high, p.value) %>%
-  pivot_wider(names_from = Model,
-              values_from = c(estimate, conf.low, conf.high, p.value)) %>%
-  mutate(`% change in estimate` =
-           round(100 * (`estimate_Without flagged` - estimate_Full) / abs(estimate_Full), 1))
+## No observations meet the primary criterion.
+## Alternative check: dropping 6 outliers (|r| > 4) and 15 very-high-leverage points (> 3(p+1)/n).
 ```
 
 ```
-## Error:
-## ! object 'model_trim' not found
-```
-
-``` r
-comp %>%
-  select(term, estimate_Full, `estimate_Without flagged`, `% change in estimate`,
-         p.value_Full, `p.value_Without flagged`) %>%
-  kable(digits = 5, caption = "Coefficients with and without influential points.")
-```
-
-```
-## Error:
-## ! object 'comp' not found
-```
-
-``` r
-comp %>%
-  filter((p.value_Full < 0.05) != (`p.value_Without flagged` < 0.05) |
-           sign(estimate_Full) != sign(`estimate_Without flagged`)) %>%
-  select(term, estimate_Full, `estimate_Without flagged`, p.value_Full, `p.value_Without flagged`)
-```
-
-```
-## Error:
-## ! object 'comp' not found
+## # A tibble: 0 × 5
+## # ℹ 5 variables: term <chr>, estimate_Full <dbl>, estimate_Sensitivity <dbl>,
+## #   p.value_Full <dbl>, p.value_Sensitivity <dbl>
 ```
 
 
 ``` r
 par(mfrow = c(1, 2))
 plot(fitted(model_trim), resid(model_trim), pch = ".", cex = 3, col = rgb(0, 0, 0, 0.4),
-     main = "Residuals vs Fitted (without flagged)", xlab = "Fitted", ylab = "Residuals")
+     main = "Residuals vs Fitted (sensitivity check)", xlab = "Fitted", ylab = "Residuals")
 abline(h = 0, col = "red", lty = 2)
 qqnorm(rstandard(model_trim), pch = ".", cex = 3, col = rgb(0, 0, 0, 0.4),
-       main = "Normal Q-Q (without flagged)")
+       main = "Normal Q-Q (sensitivity check)")
 qqline(rstandard(model_trim), col = "red", lty = 2)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/s11-4_refit_sensitivity.png" alt="plot of chunk refit-plots"  />
+<img src="results/refit-plots-1.png" alt="plot of chunk refit-plots"  />
 <p class="caption">plot of chunk refit-plots</p>
 </div>
 
@@ -1633,11 +1526,7 @@ qqline(rstandard(model_trim), col = "red", lty = 2)
 par(mfrow = c(1, 1))
 ```
 
-### 11.5 Collinearity
-
-Three tools: the pairs plot (already in 8.1) plus a correlation matrix, VIFs, and comparing the individual
-t-tests with the overall F-test. Note: VIFs are inflated by construction for terms involved in an interaction
-(Age and Age x Gender), so we compute VIFs from the model WITHOUT the interaction.
+### 10.5 Collinearity
 
 
 ``` r
@@ -1725,36 +1614,36 @@ cat("Predictors with t-test p < 0.05:", sum(tidy(model_work)$p.value[-1] < 0.05)
 ## Predictors with t-test p < 0.05: 7 of 11
 ```
 
-### 11.6 Summary of findings
+### 10.6 Summary of findings
 
 
 ``` r
 sink("results/section11_results.txt")
-cat("=== Section 11: Leverage, Outliers, Influence, Collinearity ===\n\n")
+cat("=== Section 10: Leverage, Outliers, Influence, Collinearity ===\n\n")
 
-cat("--- 11.1 Leverage ---\n")
+cat("--- 10.1 Leverage ---\n")
 cat("Cutoff 2(p+1)/n =", round(h_cut, 4), "\n")
 cat("High leverage (> 2(p+1)/n):", sum(h > h_cut), "\n")
 cat("Very high leverage (> 3(p+1)/n):", sum(h > 1.5 * h_cut), "\n")
 cat("Maximum leverage:", round(max(h), 4), "\n\n")
 
-cat("--- 11.2 Outliers ---\n")
+cat("--- 10.2 Outliers ---\n")
 cat("|r| > 2:", sum(abs(r) > 2), sprintf("(%.1f%%)\n", 100 * sum(abs(r) > 2) / n))
 cat("|r| > 3:", sum(abs(r) > 3), sprintf("(%.1f%%)\n", 100 * sum(abs(r) > 3) / n))
 cat("|r| > 4:", sum(abs(r) > 4), sprintf("(%.1f%%)\n\n", 100 * sum(abs(r) > 4) / n))
 
-cat("--- 11.3 Influence ---\n")
+cat("--- 10.3 Influence ---\n")
 cat("Cook's D cutoff qf(0.5, p+1, n-p-1) =", round(cd_cut, 4), "\n")
 cat("Cook's D > cutoff:", sum(cd > cd_cut), "\n")
 cat("Cook's D > 0.5:", sum(cd > 0.5), "  Max:", round(max(cd), 4), "\n")
 cat("|DFFITS| > cutoff:", sum(abs(dffits_v) > dffits_cut), "\n")
 cat("|DFBETAS| > cutoff (any coeff):", sum(apply(abs(dfb) > dfb_cut, 1, any)), "\n\n")
 
-cat("--- 11.4 Refit sensitivity ---\n")
+cat("--- 10.4 Refit sensitivity ---\n")
 cat("Observations flagged for removal:", length(drop_idx),
     sprintf("(%.1f%% of n)\n\n", 100 * length(drop_idx) / n))
 
-cat("--- 11.5 Collinearity ---\n")
+cat("--- 10.5 Collinearity ---\n")
 cat("VIF table:\n")
 print(round(vif_tab, 2))
 cat("Overall F significant, number of significant t-tests:",
@@ -1767,13 +1656,9 @@ cat("Results written to results/section11_results.txt\n")
 ## Results written to results/section11_results.txt
 ```
 
-## 12. Final Model: Predictor Selection, Interaction Retest, Curvature and Final Checks
+## 11. Final Model: Predictor Selection, Interaction Retest, Curvature and Final Checks
 
-`model_work` is the **full** model (1/SBP response, transformed predictors, Age x Gender). The **reduced** model drops
-DirectChol, SleepHrs, Smoke100 and PhysActive. All models below use the same response (1/SBP), so R-squared values
-can be compared with each other but not with the preliminary model (response SBP).
-
-### 12.1 Reduced model: partial F-test
+### 11.1 Reduced model: partial F-test
 
 
 ``` r
@@ -1851,7 +1736,7 @@ Table: Coefficients, full vs reduced model (NA = predictor dropped).
 write.csv(coef_cmp, "results/table2_full_vs_reduced.csv", row.names = FALSE)
 ```
 
-### 12.2 Retest the Age x Gender interaction (reduced model, linear in Age^(1/3))
+### 11.2 Retest the Age x Gender interaction (reduced model, linear in Age^(1/3))
 
 
 ``` r
@@ -1864,7 +1749,7 @@ print(p_int)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/s12-2_interaction_age_gender.png" alt="plot of chunk interaction-plot"  />
+<img src="results/interaction-plot-1.png" alt="plot of chunk interaction-plot"  />
 <p class="caption">plot of chunk interaction-plot</p>
 </div>
 
@@ -1940,11 +1825,7 @@ Table: VIF (GVIF for factors) of the reduced model without the interaction. > 5 
 write.csv(as.data.frame(round(vif_red, 2)), "results/vif_model_red.csv")
 ```
 
-### 12.3 Curvature in Age: do we need Age^2 and Age^2 x Gender?
-
-Age and Age^2 are mathematically related, so their correlation is structural multicollinearity (Module 7), and we do not
-interpret their VIFs. VIF is checked on the model without the squared term (12.2). The squared terms are judged by
-partial F-tests and fitted curves, not by their individual coefficients.
+### 11.3 Curvature in Age: do we need Age^2 and Age^2 x Gender?
 
 
 ``` r
@@ -2016,9 +1897,7 @@ overall_F(model_final, "final")
 ## Overall F-test, final: F(9, 3193) = 108.7, p = 4.3e-178
 ```
 
-BIC slightly favours "Reduced + Age²" over the final model (−44403.9 vs −44402.9) because BIC penalises the extra parameter more heavily. AIC and the partial F-test (p ≈ 0.008) favour the final model; we retain Age²×Gender on that basis.
-
-### 12.4 What the Age^2 terms change
+### 11.4 What the Age^2 terms change
 
 
 ``` r
@@ -2046,11 +1925,9 @@ print(p_curves)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/s12-4_age2_fitted_curves.png" alt="plot of chunk age2-curves"  />
+<img src="results/age2-curves-1.png" alt="plot of chunk age2-curves"  />
 <p class="caption">plot of chunk age2-curves</p>
 </div>
-
-On the 1/SBP scale a negative male minus female difference means men have the higher SBP. We do not back-transform to mm Hg. The CI comes from the model's covariance matrix. The crossing age in the preliminary model (Section 6, SBP scale) was 70.3; the reduced model on the 1/SBP scale gives approximately 72 and the final model approximately 69. These differ because the response scale and model structure differ; the final-model value is used for all conclusions.
 
 
 ``` r
@@ -2081,7 +1958,7 @@ print(p_gap)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/s12-4_age2_gender_gap.png" alt="plot of chunk age2-gap"  />
+<img src="results/age2-gap-1.png" alt="plot of chunk age2-gap"  />
 <p class="caption">plot of chunk age2-gap</p>
 </div>
 
@@ -2119,11 +1996,7 @@ Table: Age at which the estimated difference changes sign (nearest 0.5 year).
 |Final (with Age^2 terms) |69                                    |
 |Linear (reduced)         |72                                    |
 
-The 95% CI on the gap excludes 0 at age 60 but includes 0 at age 70 (see table above), so there is no clear gender difference in SBP after approximately age 70. The estimate at age 80 should be interpreted cautiously: NHANES top-codes Age at 80 (all participants aged 80 or older are recorded as 80), so the fitted curve extrapolates beyond the observed data at that point.
-
-### 12.5 Confirm the final model: problematic observations
-
-Cutoffs are the class cutoffs (Module 8), applied to the final model.
+### 11.5 Confirm the final model: problematic observations
 
 
 ``` r
@@ -2207,9 +2080,7 @@ if (length(drop_f) > 0) {
 ## No observations simultaneously satisfy the combined criterion (Cook's D > cutoff, or leverage > cutoff combined with |r| > 4). Cook's D flags 0 points (maximum = 0.0131 ). Sensitivity results are identical to the main results.
 ```
 
-### 12.6 Final residual plots
-
-Conditions 1 and 2 hold (plots in the Appendix below). Residual plots for the final model: linearity, reduced heteroscedasticity (the residual SD ratio across fitted-value quintiles falls from ~1.85 in the preliminary model to ~1.28 after the inverse transformation, though it is not fully eliminated), and improved normality from the Q-Q plot of the standardized residuals. Independence cannot be checked from row order (the NHANES package rows were resampled), and clustering within the sampling design is a limitation.
+### 11.6 Final residual plots
 
 
 ``` r
@@ -2223,7 +2094,7 @@ qqline(rstandard(model_final), col = "red", lty = 2)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/s12-6_final_resid_qq.png" alt="plot of chunk final-resid-main"  />
+<img src="results/final-resid-main-1.png" alt="plot of chunk final-resid-main"  />
 <p class="caption">plot of chunk final-resid-main</p>
 </div>
 
@@ -2245,15 +2116,13 @@ abline(h = 0, col = "red", lty = 2)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/s12-6_final_resid_predictors.png" alt="plot of chunk final-resid-pred"  />
+<img src="results/final-resid-pred-1.png" alt="plot of chunk final-resid-pred"  />
 <p class="caption">plot of chunk final-resid-pred</p>
 </div>
 
 ``` r
 par(mfrow = c(1, 1))
 ```
-
-Before and after: preliminary model, response transformed only, and the final model.
 
 
 ``` r
@@ -2272,7 +2141,7 @@ for (pair in mods) {
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/s12-6_model_comparison_resid.png" alt="plot of chunk final-compare"  />
+<img src="results/final-compare-1.png" alt="plot of chunk final-compare"  />
 <p class="caption">plot of chunk final-compare</p>
 </div>
 
@@ -2290,7 +2159,7 @@ abline(0, 1, col = "red", lty = 2)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/appendix_condition1_fitted.png" alt="plot of chunk appendix-conditions"  />
+<img src="results/appendix-conditions-1.png" alt="plot of chunk appendix-conditions"  />
 <p class="caption">plot of chunk appendix-conditions</p>
 </div>
 
@@ -2302,6 +2171,6 @@ pairs(nhanes_t[, c("Age_bc", "BMI", "TotChol_bc", "Poverty", "AlcoholYear")],
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/appendix_condition2_pairs.png" alt="plot of chunk appendix-pairs"  />
+<img src="results/appendix-pairs-1.png" alt="plot of chunk appendix-pairs"  />
 <p class="caption">plot of chunk appendix-pairs</p>
 </div>

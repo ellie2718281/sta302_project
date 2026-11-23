@@ -1,27 +1,27 @@
-=== Section 11: Leverage, Outliers, Influence, Collinearity ===
+=== Section 10: Leverage, Outliers, Influence, Collinearity ===
 
---- 11.1 Leverage ---
+--- 10.1 Leverage ---
 Cutoff 2(p+1)/n = 0.0075 
 High leverage (> 2(p+1)/n): 63 
 Very high leverage (> 3(p+1)/n): 15 
 Maximum leverage: 0.016 
 
---- 11.2 Outliers ---
+--- 10.2 Outliers ---
 |r| > 2: 171 (5.3%)
 |r| > 3: 25 (0.8%)
 |r| > 4: 6 (0.2%)
 
---- 11.3 Influence ---
+--- 10.3 Influence ---
 Cook's D cutoff qf(0.5, p+1, n-p-1) = 0.9452 
 Cook's D > cutoff: 0 
 Cook's D > 0.5: 0   Max: 0.0131 
 |DFFITS| > cutoff: 187 
 |DFBETAS| > cutoff (any coeff): 750 
 
---- 11.4 Refit sensitivity ---
+--- 10.4 Refit sensitivity ---
 Observations flagged for removal: 0 (0.0% of n)
 
---- 11.5 Collinearity ---
+--- 10.5 Collinearity ---
 VIF table:
        Age_bc           BMI DirectChol_bc    TotChol_bc       Poverty 
          1.15          1.19          1.47          1.06          1.15 
