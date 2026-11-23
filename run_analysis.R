@@ -72,4 +72,11 @@ for (old in names(renames)) {
   if (file.exists(src)) file.rename(src, dst)
 }
 
+# patch the markdown to match the renamed files
+md <- readLines("group32_part1.md", warn = FALSE)
+for (old in names(renames)) {
+  md <- gsub(old, renames[[old]], md, fixed = TRUE)
+}
+writeLines(md, "group32_part1.md")
+
 cat("\nDone. Outputs saved to results/\n")

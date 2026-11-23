@@ -136,7 +136,7 @@ qqnorm(sbp, main = "Q–Q Plot of SBP"); qqline(sbp, col = "red")
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/sbp-plots-1.png" alt="plot of chunk sbp-plots"  />
+<img src="results/s02_sbp_distribution.png" alt="plot of chunk sbp-plots"  />
 <p class="caption">plot of chunk sbp-plots</p>
 </div>
 
@@ -203,7 +203,7 @@ print(p_hist_pred)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/hist-predictors-1.png" alt="plot of chunk hist-predictors"  />
+<img src="results/s03-1_num_pred_histograms.png" alt="plot of chunk hist-predictors"  />
 <p class="caption">plot of chunk hist-predictors</p>
 </div>
 
@@ -221,7 +221,7 @@ nhanes_adult %>%
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/box-predictors-1.png" alt="plot of chunk box-predictors"  />
+<img src="results/s03-1_num_pred_boxplots.png" alt="plot of chunk box-predictors"  />
 <p class="caption">plot of chunk box-predictors</p>
 </div>
 
@@ -270,7 +270,7 @@ nhanes_adult %>%
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/bar-predictors-1.png" alt="plot of chunk bar-predictors"  />
+<img src="results/s03-2_cat_pred_barplots.png" alt="plot of chunk bar-predictors"  />
 <p class="caption">plot of chunk bar-predictors</p>
 </div>
 
@@ -289,7 +289,7 @@ print(p_sbp_age)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/sbp-age-lm-1.png" alt="plot of chunk sbp-age-lm"  />
+<img src="results/s04_sbp_vs_age_gender_linear.png" alt="plot of chunk sbp-age-lm"  />
 <p class="caption">plot of chunk sbp-age-lm</p>
 </div>
 
@@ -304,7 +304,7 @@ ggplot(dat %>% filter(!is.na(Gender)),
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/sbp-age-loess-1.png" alt="plot of chunk sbp-age-loess"  />
+<img src="results/s04_sbp_vs_age_gender_loess.png" alt="plot of chunk sbp-age-loess"  />
 <p class="caption">plot of chunk sbp-age-loess</p>
 </div>
 
@@ -402,7 +402,7 @@ qqline(dat$SBP, col = "red")
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/fig-response-1.png" alt="plot of chunk fig-response"  />
+<img src="results/s05-2_cleaned_sbp.png" alt="plot of chunk fig-response"  />
 <p class="caption">plot of chunk fig-response</p>
 </div>
 
@@ -455,7 +455,7 @@ ggplot(cont_long, aes(x = "", y = value)) +
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/fig-boxplots-1.png" alt="plot of chunk fig-boxplots"  />
+<img src="results/s05-3_cleaned_pred_boxplots.png" alt="plot of chunk fig-boxplots"  />
 <p class="caption">plot of chunk fig-boxplots</p>
 </div>
 
@@ -504,7 +504,7 @@ ggplot(dat, aes(x = Age, y = SBP, colour = Gender)) +
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/fig-age-gender-1.png" alt="plot of chunk fig-age-gender"  />
+<img src="results/s05-4_cleaned_age_gender.png" alt="plot of chunk fig-age-gender"  />
 <p class="caption">plot of chunk fig-age-gender</p>
 </div>
 
@@ -647,7 +647,7 @@ abline(0, 1, col = "red", lty = 2)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/conditions-1.png" alt="plot of chunk conditions"  />
+<img src="results/s08-1_conditions.png" alt="plot of chunk conditions"  />
 <p class="caption">plot of chunk conditions</p>
 </div>
 
@@ -658,7 +658,7 @@ pairs(nhanes_adult[, num_vars], pch = ".", col = rgb(0, 0, 0, 0.3),
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/pairs-plot-1.png" alt="plot of chunk pairs-plot"  />
+<img src="results/s08-1_pairs_plot.png" alt="plot of chunk pairs-plot"  />
 <p class="caption">plot of chunk pairs-plot</p>
 </div>
 
@@ -678,7 +678,7 @@ qqline(rstandard(model_prelim), col = "red", lty = 2)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/resid-fitted-qq-1.png" alt="plot of chunk resid-fitted-qq"  />
+<img src="results/s08-2_resid_fitted_qq.png" alt="plot of chunk resid-fitted-qq"  />
 <p class="caption">plot of chunk resid-fitted-qq</p>
 </div>
 
@@ -699,7 +699,7 @@ par(mfrow = c(1, 1))
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/resid-predictors-num-1.png" alt="plot of chunk resid-predictors-num"  />
+<img src="results/s08-2_resid_num_predictors.png" alt="plot of chunk resid-predictors-num"  />
 <p class="caption">plot of chunk resid-predictors-num</p>
 </div>
 
@@ -715,7 +715,7 @@ for (v in cat_vars) {
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/resid-predictors-cat-1.png" alt="plot of chunk resid-predictors-cat"  />
+<img src="results/s08-2_resid_cat_predictors.png" alt="plot of chunk resid-predictors-cat"  />
 <p class="caption">plot of chunk resid-predictors-cat</p>
 </div>
 
@@ -801,7 +801,7 @@ abline(h = 0, col = "red", lty = 2)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/resid-quad-1.png" alt="plot of chunk resid-quad"  />
+<img src="results/s09_resid_quad_age.png" alt="plot of chunk resid-quad"  />
 <p class="caption">plot of chunk resid-quad</p>
 </div>
 
@@ -846,7 +846,7 @@ MASS::boxcox(model_prelim, lambda = seq(-2, 2, by = 0.05))
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/boxcox-response-1.png" alt="plot of chunk boxcox-response"  />
+<img src="results/s10-1_boxcox_profile.png" alt="plot of chunk boxcox-response"  />
 <p class="caption">plot of chunk boxcox-response</p>
 </div>
 
@@ -882,7 +882,7 @@ qqline(rstandard(model_bc), col = "red", lty = 2)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/bc-resid-qq-1.png" alt="plot of chunk bc-resid-qq"  />
+<img src="results/s10-1_transformed_resid_qq.png" alt="plot of chunk bc-resid-qq"  />
 <p class="caption">plot of chunk bc-resid-qq</p>
 </div>
 
@@ -905,7 +905,7 @@ par(mfrow = c(1, 1))
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/bc-resid-num-1.png" alt="plot of chunk bc-resid-num"  />
+<img src="results/s10-1_transformed_resid_num.png" alt="plot of chunk bc-resid-num"  />
 <p class="caption">plot of chunk bc-resid-num</p>
 </div>
 
@@ -921,7 +921,7 @@ for (v in cat_vars) {
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/bc-resid-cat-1.png" alt="plot of chunk bc-resid-cat"  />
+<img src="results/s10-1_transformed_resid_cat.png" alt="plot of chunk bc-resid-cat"  />
 <p class="caption">plot of chunk bc-resid-cat</p>
 </div>
 
@@ -1045,7 +1045,7 @@ abline(h = 0, col = "red", lty = 2)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/boxcox-compare-1.png" alt="plot of chunk boxcox-compare"  />
+<img src="results/s10-3_model_comparison_resid.png" alt="plot of chunk boxcox-compare"  />
 <p class="caption">plot of chunk boxcox-compare</p>
 </div>
 
@@ -1068,7 +1068,7 @@ qqline(rstandard(model_all_bc), col = "red", lty = 2)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/boxcox-qq-1.png" alt="plot of chunk boxcox-qq"  />
+<img src="results/s10-3_model_comparison_qq.png" alt="plot of chunk boxcox-qq"  />
 <p class="caption">plot of chunk boxcox-qq</p>
 </div>
 
@@ -1151,7 +1151,7 @@ abline(h = c(h_cut, 1.5 * h_cut), col = c("orange", "red"), lty = 2)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/leverage-1.png" alt="plot of chunk leverage"  />
+<img src="results/s11-1_leverage.png" alt="plot of chunk leverage"  />
 <p class="caption">plot of chunk leverage</p>
 </div>
 
@@ -1231,7 +1231,7 @@ abline(h = c(-3, 3), v = h_cut, col = "red", lty = 2)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/outliers-1.png" alt="plot of chunk outliers"  />
+<img src="results/s11-2_outliers.png" alt="plot of chunk outliers"  />
 <p class="caption">plot of chunk outliers</p>
 </div>
 
@@ -1730,7 +1730,7 @@ abline(h = c(-dfb_cut, dfb_cut), col = "red", lty = 2)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/influence-1.png" alt="plot of chunk influence"  />
+<img src="results/s11-3_influence_cooks_dfbetas.png" alt="plot of chunk influence"  />
 <p class="caption">plot of chunk influence</p>
 </div>
 
@@ -1819,7 +1819,7 @@ qqline(rstandard(model_trim), col = "red", lty = 2)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/refit-plots-1.png" alt="plot of chunk refit-plots"  />
+<img src="results/s11-4_refit_sensitivity.png" alt="plot of chunk refit-plots"  />
 <p class="caption">plot of chunk refit-plots</p>
 </div>
 
@@ -2094,7 +2094,7 @@ print(p_int)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/interaction-plot-1.png" alt="plot of chunk interaction-plot"  />
+<img src="results/s12-2_interaction_age_gender.png" alt="plot of chunk interaction-plot"  />
 <p class="caption">plot of chunk interaction-plot</p>
 </div>
 
@@ -2281,7 +2281,7 @@ print(p_curves)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/age2-curves-1.png" alt="plot of chunk age2-curves"  />
+<img src="results/s12-4_age2_fitted_curves.png" alt="plot of chunk age2-curves"  />
 <p class="caption">plot of chunk age2-curves</p>
 </div>
 
@@ -2317,7 +2317,7 @@ print(p_gap)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/age2-gap-1.png" alt="plot of chunk age2-gap"  />
+<img src="results/s12-4_age2_gender_gap.png" alt="plot of chunk age2-gap"  />
 <p class="caption">plot of chunk age2-gap</p>
 </div>
 
@@ -2489,7 +2489,7 @@ qqline(rstandard(model_final), col = "red", lty = 2)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/final-resid-main-1.png" alt="plot of chunk final-resid-main"  />
+<img src="results/s12-6_final_resid_qq.png" alt="plot of chunk final-resid-main"  />
 <p class="caption">plot of chunk final-resid-main</p>
 </div>
 
@@ -2511,7 +2511,7 @@ abline(h = 0, col = "red", lty = 2)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/final-resid-pred-1.png" alt="plot of chunk final-resid-pred"  />
+<img src="results/s12-6_final_resid_predictors.png" alt="plot of chunk final-resid-pred"  />
 <p class="caption">plot of chunk final-resid-pred</p>
 </div>
 
@@ -2538,7 +2538,7 @@ for (pair in mods) {
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/final-compare-1.png" alt="plot of chunk final-compare"  />
+<img src="results/s12-6_model_comparison_resid.png" alt="plot of chunk final-compare"  />
 <p class="caption">plot of chunk final-compare</p>
 </div>
 
@@ -2556,7 +2556,7 @@ abline(0, 1, col = "red", lty = 2)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/appendix-conditions-1.png" alt="plot of chunk appendix-conditions"  />
+<img src="results/appendix-s08-1_conditions.png" alt="plot of chunk appendix-conditions"  />
 <p class="caption">plot of chunk appendix-conditions</p>
 </div>
 
@@ -2568,6 +2568,6 @@ pairs(nhanes_t[, c("Age_bc", "BMI", "TotChol_bc", "Poverty", "AlcoholYear")],
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/appendix-pairs-1.png" alt="plot of chunk appendix-pairs"  />
+<img src="results/appendix_condition2_pairs.png" alt="plot of chunk appendix-pairs"  />
 <p class="caption">plot of chunk appendix-pairs</p>
 </div>
