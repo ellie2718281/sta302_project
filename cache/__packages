@@ -1,0 +1,9 @@
+knitr
+NHANES
+dplyr
+tidyr
+ggplot2
+broom
+cowplot
+carData
+car
