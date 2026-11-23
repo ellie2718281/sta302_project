@@ -2556,7 +2556,7 @@ abline(0, 1, col = "red", lty = 2)
 ```
 
 <div class="figure" style="text-align: center">
-<img src="results/appendix-s08-1_conditions.png" alt="plot of chunk appendix-conditions"  />
+<img src="results/appendix_condition1_fitted.png" alt="plot of chunk appendix-conditions"  />
 <p class="caption">plot of chunk appendix-conditions</p>
 </div>
 

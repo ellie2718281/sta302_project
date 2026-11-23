@@ -10,7 +10,12 @@ opts_chunk$set(gc = TRUE)
 knit("group32_part1.Rmd", output = "group32_part1.md")
 
 # rename plots from chunk-based names to section-based descriptive names
+# NOTE: longer/more-specific names must come first to avoid substring collisions
+# (e.g. "appendix-conditions-1.png" before "conditions-1.png")
 renames <- c(
+  # Appendix — must come before shorter patterns that are substrings of these
+  "appendix-conditions-1.png"  = "appendix_condition1_fitted.png",
+  "appendix-pairs-1.png"       = "appendix_condition2_pairs.png",
   # Section 2 – Response Variable
   "sbp-plots-1.png"            = "s02_sbp_distribution.png",
   # Section 3.1 – Numeric Predictors
@@ -61,9 +66,6 @@ renames <- c(
   "final-resid-main-1.png"     = "s12-6_final_resid_qq.png",
   "final-resid-pred-1.png"     = "s12-6_final_resid_predictors.png",
   "final-compare-1.png"        = "s12-6_model_comparison_resid.png",
-  # Appendix
-  "appendix-conditions-1.png"  = "appendix_condition1_fitted.png",
-  "appendix-pairs-1.png"       = "appendix_condition2_pairs.png"
 )
 
 for (old in names(renames)) {
