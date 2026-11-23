@@ -260,7 +260,7 @@ nhanes_adult %>%
 
 
 ``` r
-p_sbp_age <- ggplot(dat %>% filter(!is.na(Gender)),
+p_sbp_age <- ggplot(nhanes_adult,
        aes(x = Age, y = BPSysAve, colour = Gender)) +
   geom_point(alpha = 0.15, size = 0.8) +
   geom_smooth(method = "lm", se = TRUE, linewidth = 1.2) +
@@ -277,7 +277,7 @@ print(p_sbp_age)
 
 
 ``` r
-ggplot(dat %>% filter(!is.na(Gender)),
+ggplot(nhanes_adult,
        aes(x = Age, y = BPSysAve, colour = Gender)) +
   geom_smooth(method = "loess", se = TRUE, linewidth = 1.2) +
   labs(title = "Mean SBP by Age and Gender (Loess)",
@@ -1169,8 +1169,7 @@ write.csv(lev_tab, "results/leverage_top15.csv", row.names = FALSE)
 
 ### 11.2 Outliers (standardized residuals)
 
-Under normal errors, about 5% of |r_i| exceed 2 and about 0.3% exceed 3. Many more than that, or any beyond ~4,
-deserve a look.
+For n >= 50 the course cutoff is |r| > 4.
 
 
 ``` r
@@ -1197,10 +1196,10 @@ Table: Standardized-residual outliers.
 par(mfrow = c(1, 2))
 plot(fitted(model_work), r, pch = ".", cex = 3, col = rgb(0, 0, 0, 0.4),
      main = "Standardized residuals vs Fitted", xlab = "Fitted 1/SBP", ylab = "Standardized residual")
-abline(h = c(-3, 3), col = "red", lty = 2)
+abline(h = c(-4, 4), col = "red", lty = 2)
 plot(h, r, pch = ".", cex = 3, col = rgb(0, 0, 0, 0.4),
      main = "Leverage vs standardized residual", xlab = "Leverage", ylab = "Standardized residual")
-abline(h = c(-3, 3), v = h_cut, col = "red", lty = 2)
+abline(h = c(-4, 4), v = h_cut, col = "red", lty = 2)
 ```
 
 <div class="figure" style="text-align: center">
@@ -1216,17 +1215,17 @@ par(mfrow = c(1, 1))
 ``` r
 nhanes_t %>%
   mutate(row = row_number(), std_resid = r) %>%
-  filter(abs(std_resid) > 3) %>%
+  filter(abs(std_resid) > 4) %>%
   arrange(desc(abs(std_resid))) %>%
   select(row, std_resid, BPSysAve, Age, Gender, BMI, DirectChol, TotChol, Poverty) %>%
   head(20) %>%
   { out_tab <<- .; . } %>%
-  kable(digits = 2, caption = "Observations with |standardized residual| > 3.")
+  kable(digits = 2, caption = "Observations with |standardized residual| > 4 (course cutoff for n >= 50).")
 ```
 
 
 
-Table: Observations with |standardized residual| > 3.
+Table: Observations with |standardized residual| > 4 (course cutoff for n >= 50).
 
 |  row| std_resid| BPSysAve| Age|Gender |   BMI| DirectChol| TotChol| Poverty|
 |----:|---------:|--------:|---:|:------|-----:|----------:|-------:|-------:|
@@ -1236,20 +1235,6 @@ Table: Observations with |standardized residual| > 3.
 | 1172|      4.56|       78|  51|female | 18.62|       1.32|    6.88|    0.00|
 |  266|      4.39|       82|  66|male   | 32.14|       1.45|    4.47|    5.00|
 |  278|      4.23|       82|  68|female | 31.04|       0.85|    3.47|    2.40|
-|  603|     -3.94|      226|  55|female | 31.98|       1.42|    3.90|    0.85|
-| 2217|     -3.88|      209|  44|female | 47.00|       1.29|    3.96|    5.00|
-| 1052|     -3.47|      179|  29|female | 30.64|       0.93|    8.15|    0.27|
-| 1602|      3.42|       89|  64|female | 23.89|       1.91|    5.40|    0.01|
-|   82|      3.38|       86|  61|female | 23.07|       2.12|    6.05|    5.00|
-| 2532|      3.31|       84|  48|female | 23.20|       1.24|    4.22|    5.00|
-|   11|      3.29|       90|  54|male   | 36.32|       1.60|    4.81|    3.28|
-| 1300|      3.26|       92|  37|male   | 63.91|       1.37|    3.96|    1.81|
-|  302|     -3.25|      212|  68|male   | 18.41|       2.17|    3.88|    1.29|
-|  491|      3.25|       95|  70|female | 53.78|       2.97|    5.15|    5.00|
-| 1295|      3.23|       89|  46|male   | 18.19|       1.53|    4.76|    0.66|
-| 2137|      3.19|       86|  49|female | 23.10|       1.40|    5.02|    3.36|
-| 2845|      3.15|       85|  26|male   | 24.20|       1.14|    3.52|    0.81|
-| 1078|     -3.14|      210|  80|female | 19.87|       1.58|    4.91|    2.75|
 
 ``` r
 write.csv(out_tab, "results/outliers_std_resid.csv", row.names = FALSE)
@@ -1266,7 +1251,7 @@ cd <- cooks.distance(model_work)
 dffits_v <- dffits(model_work)
 dfb <- dfbetas(model_work)
 
-cd_cut     <- qf(0.5, p + 1, n - p - 1)   # median of F(p+1, n-p-1) — class cutoff
+cd_cut     <- qf(0.5, p + 1, n - p - 1)
 dffits_cut <- 2 * sqrt((p + 1) / n)
 dfb_cut    <- 2 / sqrt(n)
 int_col    <- "Age_bc:Gendermale"
@@ -1560,25 +1545,34 @@ abline(h = c(-dfb_cut, dfb_cut), col = "red", lty = 2)
 par(mfrow = c(1, 1))
 ```
 
+At n = 3,203 the DFBETAS cutoff 2/√n ≈ 0.035 is very liberal and flags approximately 23% of observations. Cook's D flags 0 observations (maximum = 0.013), so no single point shifts the fitted values substantially.
+
 ### 11.4 Refit without unusual points
 
 We keep clinically plausible readings by default. Here we only check how much the conclusions depend on
-the flagged points: drop observations where Cook's D exceeds the median F-distribution cutoff, or where both high leverage and |r| > 3 occur together, and compare.
+the flagged points: drop observations where Cook's D exceeds the median F-distribution cutoff, or where both high leverage and |r| > 4 occur together (n ≥ 50 cutoff), and compare.
 
 
 ``` r
-drop_idx <- which(cd > cd_cut | (h > h_cut & abs(r) > 3))
+drop_idx <- which(cd > cd_cut | (h > h_cut & abs(r) > 4))
 cat("Observations removed for sensitivity check:", length(drop_idx),
     sprintf("(%.1f%% of n)\n", 100 * length(drop_idx) / n))
 ```
 
 ```
-## Observations removed for sensitivity check: 2 (0.1% of n)
+## Observations removed for sensitivity check: 0 (0.0% of n)
 ```
 
 ``` r
 model_trim <- update(model_work, data = nhanes_t[-drop_idx, ])
+```
 
+```
+## Error in `contrasts<-`:
+## ! contrasts can be applied only to factors with 2 or more levels
+```
+
+``` r
 comp <- bind_rows(
   tidy(model_work, conf.int = TRUE) %>% mutate(Model = "Full"),
   tidy(model_trim, conf.int = TRUE) %>% mutate(Model = "Without flagged")
@@ -1588,31 +1582,24 @@ comp <- bind_rows(
               values_from = c(estimate, conf.low, conf.high, p.value)) %>%
   mutate(`% change in estimate` =
            round(100 * (`estimate_Without flagged` - estimate_Full) / abs(estimate_Full), 1))
+```
 
+```
+## Error:
+## ! object 'model_trim' not found
+```
+
+``` r
 comp %>%
   select(term, estimate_Full, `estimate_Without flagged`, `% change in estimate`,
          p.value_Full, `p.value_Without flagged`) %>%
   kable(digits = 5, caption = "Coefficients with and without influential points.")
 ```
 
-
-
-Table: Coefficients with and without influential points.
-
-|term              | estimate_Full| estimate_Without flagged| % change in estimate| p.value_Full| p.value_Without flagged|
-|:-----------------|-------------:|------------------------:|--------------------:|------------:|-----------------------:|
-|(Intercept)       |       0.01403|                  0.01407|                  0.3|      0.00000|                 0.00000|
-|Age_bc            |      -0.00126|                 -0.00126|                 -0.2|      0.00000|                 0.00000|
-|BMI               |      -0.00002|                 -0.00002|                 -9.7|      0.00000|                 0.00000|
-|DirectChol_bc     |      -0.00004|                 -0.00006|                -67.8|      0.58761|                 0.36291|
-|TotChol_bc        |      -0.00031|                 -0.00030|                  4.2|      0.00029|                 0.00050|
-|Poverty           |       0.00007|                  0.00007|                 -0.9|      0.00000|                 0.00000|
-|SleepHrs_bc       |       0.00000|                  0.00000|                114.5|      0.91649|                 0.82164|
-|AlcoholYear       |       0.00000|                  0.00000|                 -4.9|      0.00059|                 0.00030|
-|Gendermale        |      -0.00261|                 -0.00264|                 -1.4|      0.00000|                 0.00000|
-|Smoke100Yes       |      -0.00001|                 -0.00001|                -46.2|      0.78934|                 0.69536|
-|PhysActiveYes     |      -0.00005|                 -0.00005|                  7.0|      0.17060|                 0.20148|
-|Age_bc:Gendermale |       0.00062|                  0.00063|                  1.5|      0.00000|                 0.00000|
+```
+## Error:
+## ! object 'comp' not found
+```
 
 ``` r
 comp %>%
@@ -1622,10 +1609,8 @@ comp %>%
 ```
 
 ```
-## # A tibble: 0 × 5
-## # ℹ 5 variables: term <chr>, estimate_Full <dbl>,
-## #   estimate_Without flagged <dbl>, p.value_Full <dbl>,
-## #   p.value_Without flagged <dbl>
+## Error:
+## ! object 'comp' not found
 ```
 
 
@@ -2031,6 +2016,8 @@ overall_F(model_final, "final")
 ## Overall F-test, final: F(9, 3193) = 108.7, p = 4.3e-178
 ```
 
+BIC slightly favours "Reduced + Age²" over the final model (−44403.9 vs −44402.9) because BIC penalises the extra parameter more heavily. AIC and the partial F-test (p ≈ 0.008) favour the final model; we retain Age²×Gender on that basis.
+
 ### 12.4 What the Age^2 terms change
 
 
@@ -2063,8 +2050,7 @@ print(p_curves)
 <p class="caption">plot of chunk age2-curves</p>
 </div>
 
-On the 1/SBP scale a negative male minus female difference means men have the higher SBP. We do not back-transform
-to mm Hg. The CI comes from the model's covariance matrix.
+On the 1/SBP scale a negative male minus female difference means men have the higher SBP. We do not back-transform to mm Hg. The CI comes from the model's covariance matrix. The crossing age in the preliminary model (Section 6, SBP scale) was 70.3; the reduced model on the 1/SBP scale gives approximately 72 and the final model approximately 69. These differ because the response scale and model structure differ; the final-model value is used for all conclusions.
 
 
 ``` r
@@ -2132,6 +2118,8 @@ Table: Age at which the estimated difference changes sign (nearest 0.5 year).
 |:------------------------|:-------------------------------------|
 |Final (with Age^2 terms) |69                                    |
 |Linear (reduced)         |72                                    |
+
+The 95% CI on the gap excludes 0 at age 60 but includes 0 at age 70 (see table above), so there is no clear gender difference in SBP after approximately age 70. The estimate at age 80 should be interpreted cautiously: NHANES top-codes Age at 80 (all participants aged 80 or older are recorded as 80), so the fitted curve extrapolates beyond the observed data at that point.
 
 ### 12.5 Confirm the final model: problematic observations
 
@@ -2211,20 +2199,17 @@ if (length(drop_f) > 0) {
                        gap_curve(model_final_trim, ages_grid, "Final, without flagged"))
   kable(cross_ages(gc_trim), caption = "Age where the difference crosses 0, with and without flagged points.")
 } else {
-  cat("No observations flagged: sensitivity tables are identical to the main results and are omitted.\n")
+  cat("No observations simultaneously satisfy the combined criterion (Cook's D > cutoff, or leverage > cutoff combined with |r| > 4). Cook's D flags 0 points (maximum =", round(max(cd_f), 4), "). Sensitivity results are identical to the main results.\n")
 }
 ```
 
 ```
-## No observations flagged: sensitivity tables are identical to the main results and are omitted.
+## No observations simultaneously satisfy the combined criterion (Cook's D > cutoff, or leverage > cutoff combined with |r| > 4). Cook's D flags 0 points (maximum = 0.0131 ). Sensitivity results are identical to the main results.
 ```
 
 ### 12.6 Final residual plots
 
-Conditions 1 and 2 hold (plots in the Appendix below). Residual plots for the final model: linearity and constant
-variance from residuals vs fitted and vs each predictor; normality from the Q-Q plot of the standardized residuals.
-Independence cannot be checked from row order (the NHANES package rows were resampled), and clustering within the
-sampling design is a limitation.
+Conditions 1 and 2 hold (plots in the Appendix below). Residual plots for the final model: linearity, reduced heteroscedasticity (the residual SD ratio across fitted-value quintiles falls from ~1.85 in the preliminary model to ~1.28 after the inverse transformation, though it is not fully eliminated), and improved normality from the Q-Q plot of the standardized residuals. Independence cannot be checked from row order (the NHANES package rows were resampled), and clustering within the sampling design is a limitation.
 
 
 ``` r

@@ -19,7 +19,7 @@ Cook's D > 0.5: 0   Max: 0.0131
 |DFBETAS| > cutoff (any coeff): 750 
 
 --- 11.4 Refit sensitivity ---
-Observations flagged for removal: 2 (0.1% of n)
+Observations flagged for removal: 0 (0.0% of n)
 
 --- 11.5 Collinearity ---
 VIF table:

@@ -178,7 +178,7 @@ nhanes_adult %>%
 ## 4. Research Question: SBP vs Age by Gender
 
 ```{r sbp-age-lm, fig.width = 7, fig.height = 4.5}
-p_sbp_age <- ggplot(dat %>% filter(!is.na(Gender)),
+p_sbp_age <- ggplot(nhanes_adult,
        aes(x = Age, y = BPSysAve, colour = Gender)) +
   geom_point(alpha = 0.15, size = 0.8) +
   geom_smooth(method = "lm", se = TRUE, linewidth = 1.2) +
@@ -189,7 +189,7 @@ print(p_sbp_age)
 ```
 
 ```{r sbp-age-loess, fig.width = 7, fig.height = 4.5}
-ggplot(dat %>% filter(!is.na(Gender)),
+ggplot(nhanes_adult,
        aes(x = Age, y = BPSysAve, colour = Gender)) +
   geom_smooth(method = "loess", se = TRUE, linewidth = 1.2) +
   labs(title = "Mean SBP by Age and Gender (Loess)",
@@ -771,8 +771,7 @@ write.csv(lev_tab, "results/leverage_top15.csv", row.names = FALSE)
 
 ### 11.2 Outliers (standardized residuals)
 
-Under normal errors, about 5% of |r_i| exceed 2 and about 0.3% exceed 3. Many more than that, or any beyond ~4,
-deserve a look.
+For n >= 50 the course cutoff is |r| > 4.
 
 ```{r outliers, fig.width = 10, fig.height = 4}
 r <- rstandard(model_work)
@@ -786,22 +785,22 @@ tibble(Threshold = c("|r| > 2", "|r| > 3", "|r| > 4"),
 par(mfrow = c(1, 2))
 plot(fitted(model_work), r, pch = ".", cex = 3, col = rgb(0, 0, 0, 0.4),
      main = "Standardized residuals vs Fitted", xlab = "Fitted 1/SBP", ylab = "Standardized residual")
-abline(h = c(-3, 3), col = "red", lty = 2)
+abline(h = c(-4, 4), col = "red", lty = 2)
 plot(h, r, pch = ".", cex = 3, col = rgb(0, 0, 0, 0.4),
      main = "Leverage vs standardized residual", xlab = "Leverage", ylab = "Standardized residual")
-abline(h = c(-3, 3), v = h_cut, col = "red", lty = 2)
+abline(h = c(-4, 4), v = h_cut, col = "red", lty = 2)
 par(mfrow = c(1, 1))
 ```
 
 ```{r outliers-who}
 nhanes_t %>%
   mutate(row = row_number(), std_resid = r) %>%
-  filter(abs(std_resid) > 3) %>%
+  filter(abs(std_resid) > 4) %>%
   arrange(desc(abs(std_resid))) %>%
   select(row, std_resid, BPSysAve, Age, Gender, BMI, DirectChol, TotChol, Poverty) %>%
   head(20) %>%
   { out_tab <<- .; . } %>%
-  kable(digits = 2, caption = "Observations with |standardized residual| > 3.")
+  kable(digits = 2, caption = "Observations with |standardized residual| > 4 (course cutoff for n >= 50).")
 write.csv(out_tab, "results/outliers_std_resid.csv", row.names = FALSE)
 ```
 
@@ -815,7 +814,7 @@ cd <- cooks.distance(model_work)
 dffits_v <- dffits(model_work)
 dfb <- dfbetas(model_work)
 
-cd_cut     <- qf(0.5, p + 1, n - p - 1)   # median of F(p+1, n-p-1) — class cutoff
+cd_cut     <- qf(0.5, p + 1, n - p - 1)
 dffits_cut <- 2 * sqrt((p + 1) / n)
 dfb_cut    <- 2 / sqrt(n)
 int_col    <- "Age_bc:Gendermale"
@@ -842,13 +841,15 @@ abline(h = c(-dfb_cut, dfb_cut), col = "red", lty = 2)
 par(mfrow = c(1, 1))
 ```
 
+At n = 3,203 the DFBETAS cutoff 2/√n ≈ 0.035 is very liberal and flags approximately 23% of observations. Cook's D flags 0 observations (maximum = 0.013), so no single point shifts the fitted values substantially.
+
 ### 11.4 Refit without unusual points
 
 We keep clinically plausible readings by default. Here we only check how much the conclusions depend on
-the flagged points: drop observations where Cook's D exceeds the median F-distribution cutoff, or where both high leverage and |r| > 3 occur together, and compare.
+the flagged points: drop observations where Cook's D exceeds the median F-distribution cutoff, or where both high leverage and |r| > 4 occur together (n ≥ 50 cutoff), and compare.
 
 ```{r refit-without}
-drop_idx <- which(cd > cd_cut | (h > h_cut & abs(r) > 3))
+drop_idx <- which(cd > cd_cut | (h > h_cut & abs(r) > 4))
 cat("Observations removed for sensitivity check:", length(drop_idx),
     sprintf("(%.1f%% of n)\n", 100 * length(drop_idx) / n))
 
@@ -1077,6 +1078,8 @@ write.csv(model_summary_tab, "results/table3_model_comparison.csv", row.names = 
 overall_F(model_final, "final")
 ```
 
+BIC slightly favours "Reduced + Age²" over the final model (−44403.9 vs −44402.9) because BIC penalises the extra parameter more heavily. AIC and the partial F-test (p ≈ 0.008) favour the final model; we retain Age²×Gender on that basis.
+
 ### 12.4 What the Age^2 terms change
 
 ```{r age2-curves, fig.width = 7.5, fig.height = 4.5}
@@ -1103,8 +1106,7 @@ p_curves <- ggplot(curves, aes(Age, fit, colour = Gender, linetype = Model)) +
 print(p_curves)
 ```
 
-On the 1/SBP scale a negative male minus female difference means men have the higher SBP. We do not back-transform
-to mm Hg. The CI comes from the model's covariance matrix.
+On the 1/SBP scale a negative male minus female difference means men have the higher SBP. We do not back-transform to mm Hg. The CI comes from the model's covariance matrix. The crossing age in the preliminary model (Section 6, SBP scale) was 70.3; the reduced model on the 1/SBP scale gives approximately 72 and the final model approximately 69. These differ because the response scale and model structure differ; the final-model value is used for all conclusions.
 
 ```{r age2-gap, fig.width = 7.5, fig.height = 4.5}
 gap_curve <- function(m, ages, label) {
@@ -1139,6 +1141,8 @@ kable(gap_tab, digits = 6, caption = "Final model: male - female difference (1/S
 write.csv(gap_tab, "results/table4_gender_gap.csv", row.names = FALSE)
 kable(cross_ages(gc), caption = "Age at which the estimated difference changes sign (nearest 0.5 year).")
 ```
+
+The 95% CI on the gap excludes 0 at age 60 but includes 0 at age 70 (see table above), so there is no clear gender difference in SBP after approximately age 70. The estimate at age 80 should be interpreted cautiously: NHANES top-codes Age at 80 (all participants aged 80 or older are recorded as 80), so the fitted curve extrapolates beyond the observed data at that point.
 
 ### 12.5 Confirm the final model: problematic observations
 
@@ -1187,16 +1191,13 @@ if (length(drop_f) > 0) {
                        gap_curve(model_final_trim, ages_grid, "Final, without flagged"))
   kable(cross_ages(gc_trim), caption = "Age where the difference crosses 0, with and without flagged points.")
 } else {
-  cat("No observations flagged: sensitivity tables are identical to the main results and are omitted.\n")
+  cat("No observations simultaneously satisfy the combined criterion (Cook's D > cutoff, or leverage > cutoff combined with |r| > 4). Cook's D flags 0 points (maximum =", round(max(cd_f), 4), "). Sensitivity results are identical to the main results.\n")
 }
 ```
 
 ### 12.6 Final residual plots
 
-Conditions 1 and 2 hold (plots in the Appendix below). Residual plots for the final model: linearity and constant
-variance from residuals vs fitted and vs each predictor; normality from the Q-Q plot of the standardized residuals.
-Independence cannot be checked from row order (the NHANES package rows were resampled), and clustering within the
-sampling design is a limitation.
+Conditions 1 and 2 hold (plots in the Appendix below). Residual plots for the final model: linearity, reduced heteroscedasticity (the residual SD ratio across fitted-value quintiles falls from ~1.85 in the preliminary model to ~1.28 after the inverse transformation, though it is not fully eliminated), and improved normality from the Q-Q plot of the standardized residuals. Independence cannot be checked from row order (the NHANES package rows were resampled), and clustering within the sampling design is a limitation.
 
 ```{r final-resid-main, fig.width = 9, fig.height = 4}
 par(mfrow = c(1, 2))
