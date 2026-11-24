@@ -50,7 +50,8 @@ renames <- c(
   "age2-gap-1.png"             = "s11-4_age2_gender_gap.png",
   "final-resid-main-1.png"     = "s11-6_final_resid_qq.png",
   "final-resid-pred-1.png"     = "s11-6_final_resid_predictors.png",
-  "final-compare-1.png"        = "s11-6_model_comparison_resid.png"
+  "final-compare-1.png"        = "s11-6_model_comparison_resid.png",
+  "boxcox-recheck-1.png"       = "s11-6_boxcox_recheck.png"
 )
 
 for (old in names(renames)) {
