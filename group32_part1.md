@@ -1967,6 +1967,48 @@ cat(sprintf("Headline test, any Age x Gender term in the chosen model: F(%d, %d)
 ## Headline test, any Age x Gender term in the chosen model: F(2, 3193) = 33.27, p = 5e-15
 ```
 
+
+``` r
+# GVIF from car::vif; for terms with df > 1, GVIF^(1/(2*df)) is comparable to sqrt(VIF)
+vif_final <- car::vif(model_chosen)
+print(round(vif_final, 3))
+```
+
+```
+##             Age_bc        I(Age_bc^2)             Gender                BMI 
+##            553.826            549.312           3908.502              1.046 
+##         TotChol_bc            Poverty        AlcoholYear      Age_bc:Gender 
+##              1.115              1.090              1.084          16694.592 
+## I(Age_bc^2):Gender 
+##           4736.334
+```
+
+``` r
+# Age_bc, I(Age_bc^2) and their interactions have high GVIF because Age_bc in [2.7, 4.3]
+# (not centred), making Age_bc and Age_bc^2 nearly collinear. This is structural: joint
+# F-tests and fitted curves are unaffected. Non-Age predictors (BMI, TotChol_bc,
+# Poverty, AlcoholYear, Gender) should all be below 5.
+non_age <- c("BMI", "TotChol_bc", "Poverty", "AlcoholYear")
+vif_non_age <- sapply(non_age, function(v) {
+  others <- c(setdiff(non_age, v), "Gender")
+  r2 <- summary(lm(reformulate(others, response = v), data = nhanes_t))$r.squared
+  1 / (1 - r2)
+})
+kable(data.frame(VIF = round(vif_non_age, 2)),
+      caption = "VIF of non-Age numeric predictors in the chosen model (structural Age collinearity excluded).")
+```
+
+
+
+Table: VIF of non-Age numeric predictors in the chosen model (structural Age collinearity excluded).
+
+|            |  VIF|
+|:-----------|----:|
+|BMI         | 1.03|
+|TotChol_bc  | 1.02|
+|Poverty     | 1.03|
+|AlcoholYear | 1.08|
+
 ### 11.4 What the Age^2 terms change
 
 
